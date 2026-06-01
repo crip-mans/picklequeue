@@ -1,0 +1,947 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PickleQueue — Court Management</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { display: ['Bebas Neue','cursive'], body: ['DM Sans','sans-serif'] },
+          colors: {
+            pickle: { 50:'#f0fdf0',100:'#dcfce0',200:'#bbf7c4',300:'#86ef9a',400:'#4ade68',500:'#22c544',600:'#16a336',700:'#15802d',800:'#166528',900:'#145323' },
+            court: '#1a2e1a', ink: '#0d1a0d',
+          },
+        },
+      },
+    };
+  </script>
+  <style>
+    * { font-family: 'DM Sans', sans-serif; }
+    body {
+      background-color: #0d1a0d;
+      background-image:
+        radial-gradient(ellipse at 20% 0%, rgba(34,197,68,0.12) 0%, transparent 50%),
+        radial-gradient(ellipse at 80% 100%, rgba(34,197,68,0.08) 0%, transparent 50%);
+      min-height: 100vh;
+    }
+    .display-font { font-family: 'Bebas Neue', cursive; }
+    .court-card {
+      background-image:
+        linear-gradient(rgba(34,197,68,0.06) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(34,197,68,0.06) 1px, transparent 1px);
+      background-size: 24px 24px;
+    }
+    @keyframes pulse-dot { 0%,100%{opacity:1} 50%{opacity:.4} }
+    .live-dot { animation: pulse-dot 1.5s ease-in-out infinite; }
+    @keyframes slide-up { from{transform:translateY(20px);opacity:0} to{transform:translateY(0);opacity:1} }
+    .toast { animation: slide-up 0.3s ease; }
+    .waitlist-row:hover { background: rgba(34,197,68,0.06); }
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: #0d1a0d; }
+    ::-webkit-scrollbar-thumb { background: #166528; border-radius: 3px; }
+    .input-glow:focus { outline: none; box-shadow: 0 0 0 2px rgba(34,197,68,0.5); }
+    .tab-btn { position: relative; }
+    .tab-btn::after { content:''; position:absolute; bottom:-2px; left:0; right:0; height:2px; background:#22c544; transform:scaleX(0); transition:transform 0.2s ease; }
+    .tab-btn.active::after { transform: scaleX(1); }
+    .spinner { border:2px solid rgba(34,197,68,0.2); border-top-color:#22c544; border-radius:50%; width:16px; height:16px; animation:spin .6s linear infinite; display:inline-block; }
+    @keyframes spin { to{transform:rotate(360deg)} }
+
+    /* Up Next glow pulse */
+    @keyframes glow-pulse {
+      0%,100% { box-shadow: 0 0 0 0 rgba(34,197,68,0.25), inset 0 0 20px rgba(34,197,68,0.03); }
+      50%      { box-shadow: 0 0 0 8px rgba(34,197,68,0),  inset 0 0 30px rgba(34,197,68,0.07); }
+    }
+    .up-next-banner { animation: glow-pulse 2.8s ease-in-out infinite; }
+
+    /* Individual up-next player card entrance */
+    @keyframes pop-in {
+      from { transform: scale(0.88); opacity: 0; }
+      to   { transform: scale(1);    opacity: 1; }
+    }
+    .up-next-player { animation: pop-in 0.35s ease forwards; }
+
+    /* Shine sweep on the banner */
+    @keyframes shine {
+      0%   { transform: translateX(-120%); }
+      60%  { transform: translateX(120%); }
+      100% { transform: translateX(120%); }
+    }
+    .shine-sweep::after {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: linear-gradient(105deg, transparent 40%, rgba(34,197,68,0.08) 50%, transparent 60%);
+      animation: shine 4s ease-in-out infinite;
+      pointer-events: none;
+    }
+
+    /* "ON DECK" badge blink */
+    @keyframes badge-blink { 0%,100%{opacity:1} 50%{opacity:0.5} }
+    .on-deck-badge { animation: badge-blink 1.2s ease-in-out infinite; }
+  </style>
+</head>
+<body class="text-green-100 min-h-screen">
+
+<!-- TOAST -->
+<div id="toast-container" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+<!-- HEADER -->
+<header class="border-b border-green-900/50 bg-ink/80 backdrop-blur-sm sticky top-0 z-40">
+  <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="w-8 h-8 rounded-full bg-pickle-500 flex items-center justify-center text-ink font-bold">&#127955;</div>
+      <span class="display-font text-2xl tracking-wider text-pickle-400">PickleQueue</span>
+      <span class="hidden sm:flex items-center gap-1.5 text-xs text-green-600 ml-2">
+        <span class="live-dot w-1.5 h-1.5 rounded-full bg-pickle-500 inline-block"></span>LIVE
+      </span>
+    </div>
+    <nav class="flex gap-1 pb-0.5">
+      <button id="tab-player" onclick="switchView('player')" class="tab-btn active px-3 py-1.5 text-sm font-medium text-pickle-400 rounded-t transition-colors">Players</button>
+      <button id="tab-admin"  onclick="switchView('admin')"  class="tab-btn px-3 py-1.5 text-sm font-medium text-green-500 hover:text-pickle-400 rounded-t transition-colors">Admin</button>
+    </nav>
+  </div>
+</header>
+
+<!-- ADMIN GATE -->
+<div id="admin-gate" class="hidden fixed inset-0 z-50 bg-ink/90 backdrop-blur flex items-center justify-center p-4">
+  <div class="bg-court border border-green-900 rounded-2xl p-6 w-full max-w-sm shadow-2xl">
+    <h2 class="display-font text-3xl text-pickle-400 mb-1">Admin Access</h2>
+    <p class="text-green-600 text-sm mb-4">Enter the admin password to continue.</p>
+    <input id="admin-pw-input" type="password" placeholder="Password"
+      class="input-glow w-full bg-ink border border-green-900 rounded-xl px-4 py-2.5 text-green-100 text-sm mb-3 placeholder-green-800" />
+    <div class="flex gap-2">
+      <button onclick="checkAdminPw()" class="flex-1 bg-pickle-600 hover:bg-pickle-500 text-white font-semibold py-2.5 rounded-xl text-sm transition-colors">Unlock</button>
+      <button onclick="cancelAdminGate()" class="flex-1 bg-green-950 hover:bg-green-900 text-green-400 font-semibold py-2.5 rounded-xl text-sm transition-colors">Cancel</button>
+    </div>
+    <p id="pw-error" class="text-red-400 text-xs mt-2 hidden">Incorrect password.</p>
+  </div>
+</div>
+
+<!-- MAIN -->
+<main class="max-w-6xl mx-auto px-4 py-6">
+
+  <!-- ════════════════════════════════════════
+       PLAYER VIEW
+  ════════════════════════════════════════ -->
+  <div id="view-player">
+
+    <!-- Register -->
+    <section class="mb-6">
+      <div class="bg-court border border-green-900/60 rounded-2xl p-5 max-w-md">
+        <h2 class="display-font text-2xl text-pickle-400 mb-1">Join the Queue</h2>
+        <p class="text-green-600 text-xs mb-4">Enter your name to get in line. You'll be matched when a court opens.</p>
+        <div class="flex gap-2">
+          <input id="player-name-input" type="text" placeholder="Your name or nickname" maxlength="30"
+            class="input-glow flex-1 bg-ink border border-green-900 rounded-xl px-4 py-2.5 text-green-100 text-sm placeholder-green-800"
+            onkeydown="if(event.key==='Enter') registerPlayer()" />
+          <button onclick="registerPlayer()" id="register-btn"
+            class="bg-pickle-600 hover:bg-pickle-500 active:scale-95 text-white font-semibold px-5 py-2.5 rounded-xl text-sm transition-all">Join</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════
+         UP NEXT / ON DECK BANNER
+         Visible to all players — shows who
+         is about to be called to the court.
+         Hidden when no open court exists.
+    ════════════════════════════════════════ -->
+    <section id="up-next-section" class="mb-6 hidden">
+      <div class="up-next-banner shine-sweep relative overflow-hidden bg-gradient-to-br from-pickle-900/70 via-green-950 to-ink border border-pickle-600/50 rounded-2xl p-5">
+
+        <!-- Header row -->
+        <div class="flex items-center justify-between mb-1">
+          <div class="flex items-center gap-2.5">
+            <span class="live-dot w-2.5 h-2.5 rounded-full bg-pickle-400 inline-block shrink-0"></span>
+            <span class="display-font text-3xl text-pickle-300 tracking-wide leading-none">On Deck</span>
+          </div>
+          <span class="on-deck-badge text-xs font-bold bg-pickle-600/30 border border-pickle-500/50 text-pickle-300 px-2.5 py-1 rounded-full tracking-wide">
+            GET READY
+          </span>
+        </div>
+
+        <p class="text-green-500 text-xs mb-4 ml-[1.125rem] pl-2.5">
+          These players are next up — start warming up now!
+        </p>
+
+        <!-- Player cards grid -->
+        <div id="up-next-players" class="grid grid-cols-2 sm:grid-cols-4 gap-3"></div>
+
+        <!-- Court name label -->
+        <div id="up-next-court" class="mt-3 text-center text-xs text-green-600 hidden">
+          Heading to <span id="up-next-court-name" class="text-pickle-400 font-semibold"></span>
+        </div>
+
+        <!-- Decorative corner glow -->
+        <div class="pointer-events-none absolute -top-8 -right-8 w-40 h-40 rounded-full bg-pickle-500/10 blur-2xl"></div>
+      </div>
+    </section>
+
+    <!-- Courts + Waitlist grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+      <section>
+        <div class="flex items-center gap-2 mb-3">
+          <h2 class="display-font text-xl text-green-300">Active Courts</h2>
+          <span id="courts-count" class="bg-green-950 text-green-500 text-xs px-2 py-0.5 rounded-full font-medium">0</span>
+        </div>
+        <div id="courts-list" class="flex flex-col gap-3">
+          <div class="text-green-700 text-sm py-6 text-center border border-dashed border-green-900 rounded-xl">No courts yet</div>
+        </div>
+      </section>
+
+      <section>
+        <div class="flex items-center gap-2 mb-3">
+          <h2 class="display-font text-xl text-green-300">Waiting Queue</h2>
+          <span id="waitlist-count" class="bg-green-950 text-green-500 text-xs px-2 py-0.5 rounded-full font-medium">0</span>
+        </div>
+        <div class="bg-court border border-green-900/60 rounded-2xl overflow-hidden">
+          <div class="grid grid-cols-12 text-xs text-green-700 uppercase tracking-wider px-4 py-2 border-b border-green-900/40">
+            <span class="col-span-1">#</span>
+            <span class="col-span-7">Player</span>
+            <span class="col-span-4 text-right">Games</span>
+          </div>
+          <div id="waitlist-body" class="divide-y divide-green-900/30 max-h-[420px] overflow-y-auto">
+            <div class="text-green-700 text-sm py-8 text-center">Queue is empty — be first!</div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </div><!-- /view-player -->
+
+
+  <!-- ════════════════════════════════════════
+       ADMIN VIEW
+  ════════════════════════════════════════ -->
+  <div id="view-admin" class="hidden">
+    <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
+
+      <!-- Left: courts + auto-match status -->
+      <div class="xl:col-span-2 flex flex-col gap-6">
+
+        <!-- Auto-match status card -->
+        <div class="bg-court border border-pickle-700/40 rounded-2xl p-5">
+          <div class="flex flex-col sm:flex-row sm:items-start gap-4">
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2 flex-wrap mb-1">
+                <h2 class="display-font text-2xl text-pickle-400 leading-none">Auto-Match</h2>
+                <span class="text-xs px-2 py-0.5 rounded-full font-bold bg-pickle-900/60 text-pickle-300 border border-pickle-600/50 flex items-center gap-1">
+                  <span class="live-dot w-1.5 h-1.5 rounded-full bg-pickle-400 inline-block"></span>ACTIVE
+                </span>
+              </div>
+              <p class="text-green-600 text-xs mb-2">Fires automatically when a match finishes and a court opens. Prioritises 0-game players, then fewest games.</p>
+              <div class="flex items-start gap-1.5 bg-ink/40 border border-green-900/40 rounded-xl px-3 py-2">
+                <span class="text-green-700 text-xs shrink-0 mt-0.5">&#x25BA;</span>
+                <p id="automatch-status" class="text-green-500 text-xs italic">Watching for open courts...</p>
+              </div>
+            </div>
+            <button onclick="autoMatch(false)" id="auto-match-btn"
+              class="flex items-center gap-2 bg-green-950 hover:bg-green-900 border border-green-800 active:scale-95 text-green-400 font-semibold px-4 py-2.5 rounded-xl text-sm transition-all whitespace-nowrap shrink-0">
+              &#x26A1; Force Now
+            </button>
+          </div>
+        </div>
+
+        <!-- Courts -->
+        <div>
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="display-font text-xl text-green-300">Courts</h2>
+            <button onclick="openAddCourt()" class="text-xs bg-green-950 hover:bg-green-900 border border-green-800 text-green-400 px-3 py-1.5 rounded-lg transition-colors">+ Add Court</button>
+          </div>
+          <div id="admin-courts-list" class="flex flex-col gap-4"></div>
+        </div>
+
+      </div>
+
+      <!-- Right: waitlist + add court form -->
+      <div class="flex flex-col gap-4">
+
+        <!-- Add court form (hidden by default) -->
+        <div id="add-court-form" class="hidden bg-court border border-green-900/60 rounded-2xl p-4">
+          <h3 class="font-semibold text-green-300 mb-3 text-sm">New Court</h3>
+          <input id="court-name-input" type="text" placeholder="Court name (e.g. Court 1)"
+            class="input-glow w-full bg-ink border border-green-900 rounded-xl px-4 py-2.5 text-green-100 text-sm mb-2 placeholder-green-800"
+            onkeydown="if(event.key==='Enter') addCourt()" />
+          <div class="flex gap-2">
+            <button onclick="addCourt()" class="flex-1 bg-pickle-600 hover:bg-pickle-500 text-white text-sm font-semibold py-2 rounded-xl transition-colors">Add</button>
+            <button onclick="closeAddCourt()" class="flex-1 bg-green-950 hover:bg-green-900 text-green-400 text-sm font-semibold py-2 rounded-xl transition-colors">Cancel</button>
+          </div>
+        </div>
+
+        <!-- Admin waitlist with Clear All -->
+        <div class="bg-court border border-green-900/60 rounded-2xl overflow-hidden">
+          <div class="px-4 py-3 border-b border-green-900/40 flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2">
+              <span class="display-font text-lg text-green-300">All Players</span>
+              <span id="admin-waitlist-count" class="bg-green-950 text-green-500 text-xs px-2 py-0.5 rounded-full">0</span>
+            </div>
+            <!-- Clear All button — clears ALL players (waiting + playing) -->
+            <button onclick="clearAllPlayers()"
+              class="text-xs bg-red-950 hover:bg-red-900 border border-red-900/60 text-red-400 px-2.5 py-1.5 rounded-lg transition-colors font-medium">
+              &#x1F5D1; Clear All
+            </button>
+          </div>
+          <div id="admin-waitlist-body" class="divide-y divide-green-900/30 max-h-[560px] overflow-y-auto"></div>
+        </div>
+
+      </div>
+    </div>
+  </div><!-- /view-admin -->
+
+</main>
+
+<!-- FINISH MATCH MODAL -->
+<div id="finish-modal" class="hidden fixed inset-0 z-50 bg-ink/80 backdrop-blur flex items-center justify-center p-4">
+  <div class="bg-court border border-green-900 rounded-2xl p-6 w-full max-w-md shadow-2xl">
+    <h2 class="display-font text-3xl text-pickle-400 mb-1">Finish Match</h2>
+    <p id="finish-court-name" class="text-green-600 text-sm mb-4"></p>
+    <p class="text-xs text-green-500 uppercase tracking-wider mb-2 font-medium">Select the winning pair</p>
+    <div class="flex flex-col gap-2 mb-5" id="finish-pairs"></div>
+    <div class="flex gap-2">
+      <button onclick="finishMatch()" class="flex-1 bg-pickle-600 hover:bg-pickle-500 text-white font-bold py-2.5 rounded-xl text-sm transition-colors">Confirm & Clear Court</button>
+      <button onclick="closeFinishModal()" class="flex-1 bg-green-950 hover:bg-green-900 text-green-400 font-semibold py-2.5 rounded-xl text-sm transition-colors">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- ASSIGN MODAL -->
+<div id="assign-modal" class="hidden fixed inset-0 z-50 bg-ink/80 backdrop-blur flex items-center justify-center p-4">
+  <div class="bg-court border border-green-900 rounded-2xl p-6 w-full max-w-md shadow-2xl">
+    <h2 class="display-font text-3xl text-pickle-400 mb-1">Assign Players</h2>
+    <p id="assign-court-label" class="text-green-600 text-sm mb-4"></p>
+    <p class="text-xs text-green-500 uppercase tracking-wider mb-2 font-medium">Select exactly 4 players</p>
+    <div id="assign-player-list" class="flex flex-col gap-1 max-h-64 overflow-y-auto mb-4 border border-green-900/40 rounded-xl p-2"></div>
+    <p id="assign-error" class="text-red-400 text-xs mb-2 hidden">Please select exactly 4 players.</p>
+    <div class="flex gap-2">
+      <button onclick="confirmAssign()" class="flex-1 bg-pickle-600 hover:bg-pickle-500 text-white font-bold py-2.5 rounded-xl text-sm transition-colors">Assign to Court</button>
+      <button onclick="closeAssignModal()" class="flex-1 bg-green-950 hover:bg-green-900 text-green-400 font-semibold py-2.5 rounded-xl text-sm transition-colors">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ════════════════════════════════════════════════
+// SUPABASE CONFIG — replace with your values
+// ════════════════════════════════════════════════
+const SUPABASE_URL   = '';
+const SUPABASE_ANON  = '';
+const ADMIN_PASSWORD = 'pickle123'; // change this!
+
+// DB SCHEMA:
+// players : id uuid pk, name text, games_played int default 0,
+//           status text default 'waiting', created_at timestamptz default now()
+// courts  : id uuid pk, name text, player_ids uuid[] default '{}',
+//           is_active boolean default true, created_at timestamptz default now()
+// Enable Realtime on both tables!
+
+const { createClient } = supabase;
+const db = createClient(SUPABASE_URL, SUPABASE_ANON);
+
+// ── STATE ─────────────────────────────────────────
+let players       = [];
+let courts        = [];
+let adminUnlocked = false;
+let finishState   = { courtId: null, selectedPairIndex: null };
+let assignState   = { courtId: null, selected: new Set() };
+
+// ════════════════════════════════════════════════
+// INIT
+// ════════════════════════════════════════════════
+async function init() {
+  await Promise.all([fetchPlayers(), fetchCourts()]);
+  renderAll();
+  subscribeRealtime();
+}
+
+async function fetchPlayers() {
+  const { data, error } = await db.from('players').select('*')
+    .order('games_played', { ascending: true })
+    .order('created_at',   { ascending: true });
+  if (!error) players = data || [];
+}
+
+async function fetchCourts() {
+  const { data, error } = await db.from('courts').select('*')
+    .eq('is_active', true).order('created_at', { ascending: true });
+  if (!error) courts = data || [];
+}
+
+// ════════════════════════════════════════════════
+// REALTIME
+// ════════════════════════════════════════════════
+function subscribeRealtime() {
+  db.channel('public:players')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'players' }, async () => {
+      await fetchPlayers(); renderAll();
+    }).subscribe();
+  db.channel('public:courts')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'courts' }, async () => {
+      await fetchCourts(); renderAll();
+    }).subscribe();
+}
+
+// ════════════════════════════════════════════════
+// RENDER ALL
+// ════════════════════════════════════════════════
+function renderAll() {
+  renderCourts();
+  renderWaitlist();
+  renderUpNext();
+  if (adminUnlocked) {
+    renderAdminCourts();
+    renderAdminWaitlist();
+  }
+}
+
+function getPlayer(id) { return players.find(p => p.id === id); }
+
+// ════════════════════════════════════════════════
+// PUBLIC: COURTS
+// ════════════════════════════════════════════════
+function renderCourts() {
+  const el = document.getElementById('courts-list');
+  document.getElementById('courts-count').textContent = courts.length;
+  if (!courts.length) {
+    el.innerHTML = `<div class="text-green-700 text-sm py-6 text-center border border-dashed border-green-900 rounded-xl">No courts yet</div>`;
+    return;
+  }
+  el.innerHTML = courts.map(court => {
+    const pids  = court.player_ids || [];
+    const active = pids.length === 4;
+    const ps    = pids.map(id => getPlayer(id)).filter(Boolean);
+    const teamA = ps.slice(0,2), teamB = ps.slice(2,4);
+    return `
+    <div class="court-card bg-court border border-green-900/60 rounded-2xl p-4">
+      <div class="flex items-center justify-between mb-3">
+        <span class="display-font text-lg text-green-200">${esc(court.name)}</span>
+        <span class="text-xs px-2 py-0.5 rounded-full font-medium ${active ? 'bg-pickle-900/50 text-pickle-400 border border-pickle-700/40' : 'bg-green-950 text-green-600 border border-green-900'}">
+          ${active ? '&#9679; Playing' : '&#9675; Open'}
+        </span>
+      </div>
+      ${active ? `
+        <div class="grid grid-cols-2 gap-2">
+          <div class="bg-ink/50 rounded-xl p-3">
+            <div class="text-xs text-green-700 uppercase mb-1.5 font-medium">Team A</div>
+            ${teamA.map(p => `<div class="text-sm text-green-200 font-medium">${esc(p.name)}</div>`).join('')}
+          </div>
+          <div class="bg-ink/50 rounded-xl p-3">
+            <div class="text-xs text-green-700 uppercase mb-1.5 font-medium">Team B</div>
+            ${teamB.map(p => `<div class="text-sm text-green-200 font-medium">${esc(p.name)}</div>`).join('')}
+          </div>
+        </div>
+      ` : `<div class="text-green-700 text-sm text-center py-2">Waiting for players...</div>`}
+    </div>`;
+  }).join('');
+}
+
+// ════════════════════════════════════════════════
+// PUBLIC: WAITLIST
+// ════════════════════════════════════════════════
+function renderWaitlist() {
+  const waiting = players.filter(p => p.status === 'waiting');
+  document.getElementById('waitlist-count').textContent = waiting.length;
+  const el = document.getElementById('waitlist-body');
+  if (!waiting.length) {
+    el.innerHTML = `<div class="text-green-700 text-sm py-8 text-center">Queue is empty — be first!</div>`;
+    return;
+  }
+  // Compute the deterministic top-4 indices so we can highlight them
+  const topIds = getNextFourIds(waiting);
+  el.innerHTML = waiting.map((p, i) => {
+    const isNext = topIds.includes(p.id);
+    return `
+    <div class="waitlist-row grid grid-cols-12 px-4 py-2.5 transition-colors items-center ${isNext ? 'bg-pickle-900/20' : ''}">
+      <span class="col-span-1 text-green-700 text-sm font-mono">${i+1}</span>
+      <span class="col-span-7 text-sm font-medium truncate ${isNext ? 'text-pickle-300' : 'text-green-200'}">
+        ${esc(p.name)}
+        ${isNext ? '<span class="ml-1.5 text-xs bg-pickle-900/60 border border-pickle-700/40 text-pickle-400 px-1.5 py-0.5 rounded-full font-bold">Next</span>' : ''}
+      </span>
+      <span class="col-span-4 text-right">
+        <span class="text-xs ${p.games_played === 0 ? 'text-pickle-400 font-bold' : 'text-green-500'}">${p.games_played} game${p.games_played !== 1 ? 's' : ''}</span>
+      </span>
+    </div>`;
+  }).join('');
+}
+
+// ════════════════════════════════════════════════
+// PUBLIC: UP NEXT / ON DECK BANNER
+//
+// Deterministic preview — no randomness here so
+// players always see a stable "you're next" signal.
+// Uses same priority order as the auto-matcher:
+//   1. 0-game players first (sorted by join time)
+//   2. Then fewest games (tied by join time)
+// Shows only when there is at least one open court
+// and at least 1 player waiting.
+// ════════════════════════════════════════════════
+function renderUpNext() {
+  const waiting    = players.filter(p => p.status === 'waiting');
+  const section    = document.getElementById('up-next-section');
+  const openCourt  = courts.find(c => !c.player_ids || c.player_ids.length < 4);
+
+  if (!waiting.length || !openCourt) {
+    section.classList.add('hidden');
+    return;
+  }
+
+  const top = getNextFourIds(waiting).map(id => waiting.find(p => p.id === id)).filter(Boolean);
+
+  document.getElementById('up-next-players').innerHTML = top.map((p, i) => `
+    <div class="up-next-player flex flex-col items-center gap-1 bg-ink/60 border border-pickle-800/60 rounded-xl px-3 py-3 text-center"
+         style="animation-delay:${i * 0.07}s">
+      <span class="display-font text-3xl text-pickle-500 leading-none">${i+1}</span>
+      <span class="text-sm font-bold text-green-100 truncate w-full">${esc(p.name)}</span>
+      <span class="text-xs ${p.games_played === 0 ? 'text-pickle-400 font-bold' : 'text-green-600'}">
+        ${p.games_played === 0 ? '&#x2B50; New!' : p.games_played + 'g'}
+      </span>
+    </div>
+  `).join('');
+
+  // Show the target court name
+  const courtEl   = document.getElementById('up-next-court');
+  const courtName = document.getElementById('up-next-court-name');
+  if (openCourt) {
+    courtName.textContent = openCourt.name;
+    courtEl.classList.remove('hidden');
+  } else {
+    courtEl.classList.add('hidden');
+  }
+
+  section.classList.remove('hidden');
+}
+
+// Returns array of up to 4 player IDs in deterministic priority order
+function getNextFourIds(waitingPool) {
+  const sorted = [...waitingPool].sort((a, b) => {
+    if (a.games_played !== b.games_played) return a.games_played - b.games_played;
+    return new Date(a.created_at) - new Date(b.created_at);
+  });
+  return sorted.slice(0, 4).map(p => p.id);
+}
+
+// ════════════════════════════════════════════════
+// ADMIN: COURTS
+// ════════════════════════════════════════════════
+function renderAdminCourts() {
+  const el = document.getElementById('admin-courts-list');
+  if (!courts.length) {
+    el.innerHTML = `<div class="text-green-700 text-sm py-6 text-center border border-dashed border-green-900 rounded-xl">No courts — add one above</div>`;
+    return;
+  }
+  el.innerHTML = courts.map(court => {
+    const pids   = court.player_ids || [];
+    const active = pids.length === 4;
+    const ps     = pids.map(id => getPlayer(id)).filter(Boolean);
+    const teamA  = ps.slice(0,2), teamB = ps.slice(2,4);
+    return `
+    <div class="court-card bg-court border border-green-900/60 rounded-2xl p-4">
+      <div class="flex items-center justify-between mb-3">
+        <span class="display-font text-lg text-green-200">${esc(court.name)}</span>
+        <div class="flex gap-2">
+          <button onclick="openAssignModal('${court.id}')" class="text-xs bg-green-950 hover:bg-green-900 border border-green-800 text-green-400 px-2.5 py-1 rounded-lg transition-colors">Assign</button>
+          <button onclick="removeCourt('${court.id}')"    class="text-xs bg-red-950 hover:bg-red-900 border border-red-900 text-red-400 px-2.5 py-1 rounded-lg transition-colors">Remove</button>
+        </div>
+      </div>
+      ${active ? `
+        <div class="grid grid-cols-2 gap-2 mb-3">
+          <div class="bg-ink/50 rounded-xl p-3">
+            <div class="text-xs text-green-700 uppercase mb-1.5 font-medium">Team A</div>
+            ${teamA.map(p => `<div class="text-sm text-green-200">${esc(p.name)} <span class="text-green-700 text-xs">(${p.games_played}g)</span></div>`).join('')}
+          </div>
+          <div class="bg-ink/50 rounded-xl p-3">
+            <div class="text-xs text-green-700 uppercase mb-1.5 font-medium">Team B</div>
+            ${teamB.map(p => `<div class="text-sm text-green-200">${esc(p.name)} <span class="text-green-700 text-xs">(${p.games_played}g)</span></div>`).join('')}
+          </div>
+        </div>
+        <button onclick="openFinishModal('${court.id}')" class="w-full bg-pickle-700 hover:bg-pickle-600 text-white font-semibold py-2 rounded-xl text-sm transition-colors">
+          &#127942; Finish Match
+        </button>
+      ` : `<div class="text-green-700 text-sm text-center py-2">Open — no players assigned</div>`}
+    </div>`;
+  }).join('');
+}
+
+// ════════════════════════════════════════════════
+// ADMIN: WAITLIST (all players, with remove each)
+// ════════════════════════════════════════════════
+function renderAdminWaitlist() {
+  const all = [...players].sort((a, b) => {
+    // waiting first, then playing; within each group sort by games then join time
+    if (a.status !== b.status) return a.status === 'waiting' ? -1 : 1;
+    if (a.games_played !== b.games_played) return a.games_played - b.games_played;
+    return new Date(a.created_at) - new Date(b.created_at);
+  });
+  document.getElementById('admin-waitlist-count').textContent = all.length;
+  const el = document.getElementById('admin-waitlist-body');
+  if (!all.length) {
+    el.innerHTML = `<div class="text-green-700 text-sm py-6 text-center">No players registered yet</div>`;
+    return;
+  }
+  el.innerHTML = all.map((p, i) => {
+    const isPlaying = p.status === 'playing';
+    return `
+    <div class="flex items-center justify-between px-4 py-2.5 hover:bg-green-950/30 transition-colors">
+      <div class="flex items-center gap-2 min-w-0">
+        <span class="text-green-700 text-xs font-mono w-5 shrink-0">${i+1}</span>
+        <span class="text-sm truncate ${isPlaying ? 'text-pickle-400 font-semibold' : 'text-green-200'}">${esc(p.name)}</span>
+        <span class="text-xs shrink-0 ${isPlaying ? 'text-pickle-600' : 'text-green-700'}">${p.games_played}g</span>
+        ${isPlaying ? '<span class="text-xs text-pickle-600 shrink-0">&#9679; playing</span>' : ''}
+      </div>
+      <button onclick="removePlayer('${p.id}')" class="ml-2 text-xs text-red-500 hover:text-red-400 transition-colors shrink-0" title="Remove">&#x2715;</button>
+    </div>`;
+  }).join('');
+}
+
+// ════════════════════════════════════════════════
+// PLAYER ACTIONS
+// ════════════════════════════════════════════════
+async function registerPlayer() {
+  const input = document.getElementById('player-name-input');
+  const name  = input.value.trim();
+  if (!name) { toast('Enter a name first!', 'warn'); return; }
+  const exists = players.some(p => p.name.toLowerCase() === name.toLowerCase());
+  if (exists) { toast('That name is already in the system!', 'warn'); return; }
+  setLoading('register-btn', true);
+  const { error } = await db.from('players').insert({ name, games_played: 0, status: 'waiting' });
+  setLoading('register-btn', false);
+  if (error) { toast('Error joining queue — check Supabase credentials.', 'error'); console.error(error); return; }
+  input.value = '';
+  toast(name + ' joined the queue! &#127955;', 'success');
+}
+
+async function removePlayer(id) {
+  const p = getPlayer(id);
+  if (!confirm('Remove ' + (p?.name || 'this player') + '?')) return;
+  const { error } = await db.from('players').delete().eq('id', id);
+  if (error) { toast('Error removing player.', 'error'); return; }
+  toast('Player removed.', 'success');
+}
+
+// ── CLEAR ALL — removes every player (waiting + playing) ──────
+// Also clears all courts so nobody is left "playing" on a cleared roster.
+async function clearAllPlayers() {
+  if (!players.length) { toast('No players to clear.', 'warn'); return; }
+  if (!confirm('Remove ALL ' + players.length + ' player(s) and clear all courts? This cannot be undone.')) return;
+
+  // Clear all court rosters first
+  if (courts.length) {
+    await db.from('courts').update({ player_ids: [] }).eq('is_active', true);
+  }
+  // Delete all players
+  const { error } = await db.from('players').delete().neq('id', '00000000-0000-0000-0000-000000000000'); // deletes all rows
+  if (error) {
+    // Fallback: delete by known IDs
+    const ids = players.map(p => p.id);
+    const { error: e2 } = await db.from('players').delete().in('id', ids);
+    if (e2) { toast('Error clearing players.', 'error'); return; }
+  }
+  toast('All players cleared.', 'success');
+}
+
+// ════════════════════════════════════════════════
+// COURT ACTIONS
+// ════════════════════════════════════════════════
+function openAddCourt() {
+  document.getElementById('add-court-form').classList.remove('hidden');
+  document.getElementById('court-name-input').focus();
+}
+function closeAddCourt() {
+  document.getElementById('add-court-form').classList.add('hidden');
+  document.getElementById('court-name-input').value = '';
+}
+
+async function addCourt() {
+  const input = document.getElementById('court-name-input');
+  const name  = input.value.trim();
+  if (!name) { toast('Enter a court name.', 'warn'); return; }
+  const { error } = await db.from('courts').insert({ name, player_ids: [], is_active: true });
+  if (error) { toast('Error adding court.', 'error'); return; }
+  closeAddCourt();
+  toast(name + ' added!', 'success');
+}
+
+async function removeCourt(id) {
+  const court = courts.find(c => c.id === id);
+  if (!confirm('Remove "' + (court?.name || 'this court') + '"? Players on it will return to waiting.')) return;
+  if (court.player_ids?.length) {
+    await db.from('players').update({ status: 'waiting' }).in('id', court.player_ids);
+  }
+  const { error } = await db.from('courts').update({ is_active: false }).eq('id', id);
+  if (error) { toast('Error removing court.', 'error'); return; }
+  toast('Court removed.', 'success');
+}
+
+// ════════════════════════════════════════════════
+// AUTO-MATCH ALGORITHM
+// ════════════════════════════════════════════════
+//
+//  TIER 1 — 0-game players ALWAYS first.
+//    Pure random among them only.
+//
+//  TIER 2 — Exponential decay (base 0.2):
+//    weight = 0.2 ^ (games - minG)
+//    minG = 1.0 (100%), +1 = 20%, +2 = 4% ...
+//
+//  TIER 3 — Tiebreak by earliest join time (+10% max).
+//
+//  silent=true  → triggered automatically after a match
+//  silent=false → triggered by Force Now button
+// ════════════════════════════════════════════════
+async function autoMatch(silent) {
+  if (silent === undefined) silent = false;
+
+  const openCourt = courts.find(c => !c.player_ids || c.player_ids.length < 4);
+  if (!openCourt) {
+    if (!silent) toast('No open courts available!', 'warn');
+    return;
+  }
+
+  const waiting = players.filter(p => p.status === 'waiting');
+  if (waiting.length < 4) {
+    if (!silent) toast('Need at least 4 waiting players (have ' + waiting.length + ').', 'warn');
+    return;
+  }
+
+  if (!silent) setLoading('auto-match-btn', true);
+
+  function weightedPick(pool) {
+    const total = pool.reduce((s, p) => s + p.weight, 0);
+    let rng = Math.random() * total;
+    for (const p of pool) { rng -= p.weight; if (rng <= 0) return p; }
+    return pool[pool.length - 1];
+  }
+
+  const picked = [];
+  let pool = [...waiting];
+
+  for (let i = 0; i < 4; i++) {
+    const fresh = pool.filter(p => p.games_played === 0);
+    let weighted;
+    if (fresh.length > 0) {
+      weighted = fresh.map(p => ({ ...p, weight: 1 }));
+    } else {
+      const minG     = Math.min(...pool.map(p => p.games_played));
+      const earliest = Math.min(...pool.map(p => new Date(p.created_at).getTime()));
+      weighted = pool.map(p => {
+        const gameWeight = Math.pow(0.2, p.games_played - minG);
+        const ageSecs    = (new Date(p.created_at).getTime() - earliest) / 1000;
+        const ageBonus   = 1 + Math.max(0, 1 - ageSecs / 3600) * 0.1;
+        return { ...p, weight: gameWeight * ageBonus };
+      });
+    }
+    const chosen = weightedPick(weighted);
+    picked.push(chosen);
+    pool = pool.filter(p => p.id !== chosen.id);
+  }
+
+  await assignPlayersToCourt(openCourt.id, picked.map(p => p.id));
+
+  const names = picked.map(p => p.name).join(', ');
+  const stEl  = document.getElementById('automatch-status');
+  if (stEl) stEl.textContent = 'Last match: ' + names + ' \u2192 ' + openCourt.name;
+
+  if (!silent) {
+    setLoading('auto-match-btn', false);
+    toast('Matched! ' + names + ' \u2192 ' + openCourt.name, 'success');
+  } else {
+    toast('Auto-matched \u2192 ' + openCourt.name + ': ' + names, 'success');
+  }
+}
+
+async function assignPlayersToCourt(courtId, playerIds) {
+  const { error: ce } = await db.from('courts').update({ player_ids: playerIds }).eq('id', courtId);
+  if (ce) { toast('Error assigning to court.', 'error'); return false; }
+  const { error: pe } = await db.from('players').update({ status: 'playing' }).in('id', playerIds);
+  if (pe) { toast('Error updating player status.', 'error'); return false; }
+  return true;
+}
+
+// ════════════════════════════════════════════════
+// FINISH MATCH MODAL
+// ════════════════════════════════════════════════
+function openFinishModal(courtId) {
+  const court = courts.find(c => c.id === courtId);
+  const pids  = court.player_ids || [];
+  const ps    = pids.map(id => getPlayer(id)).filter(Boolean);
+  if (ps.length < 4) { toast('Court must have 4 players.', 'warn'); return; }
+  finishState = { courtId, selectedPairIndex: null };
+  document.getElementById('finish-court-name').textContent = 'Court: ' + court.name;
+  const teamA = ps.slice(0,2), teamB = ps.slice(2,4);
+  document.getElementById('finish-pairs').innerHTML = [teamA, teamB].map((pair, i) => `
+    <label class="flex items-center gap-3 border border-green-900 hover:border-pickle-700 rounded-xl p-3 cursor-pointer transition-colors has-[:checked]:border-pickle-500 has-[:checked]:bg-pickle-900/20">
+      <input type="radio" name="winner-pair" value="${i}" onchange="finishState.selectedPairIndex=${i}" class="accent-pickle-500 w-4 h-4" />
+      <div>
+        <div class="text-xs text-green-600 uppercase mb-0.5 font-medium">Team ${i===0?'A':'B'} wins</div>
+        <div class="text-sm text-green-200">${pair.map(p => esc(p.name)).join(' & ')}</div>
+      </div>
+    </label>
+  `).join('');
+  document.getElementById('finish-modal').classList.remove('hidden');
+}
+
+async function finishMatch() {
+  if (finishState.selectedPairIndex === null) { toast('Select the winning team first.', 'warn'); return; }
+  const court = courts.find(c => c.id === finishState.courtId);
+  const pids  = court.player_ids || [];
+
+  // +1 game to all 4 players, set back to waiting
+  for (const id of pids) {
+    const p = getPlayer(id);
+    if (p) await db.from('players').update({ games_played: p.games_played + 1, status: 'waiting' }).eq('id', id);
+  }
+  await db.from('courts').update({ player_ids: [] }).eq('id', court.id);
+  closeFinishModal();
+  toast('Match finished! All 4 players back in queue. &#127955;', 'success');
+
+  // ── AUTO-MATCH fires automatically after a court clears ──
+  // Wait briefly for Supabase realtime to propagate, then match.
+  setTimeout(async () => {
+    await fetchPlayers();
+    await fetchCourts();
+    const still  = courts.find(c => !c.player_ids || c.player_ids.length < 4);
+    const avail  = players.filter(p => p.status === 'waiting');
+    if (still && avail.length >= 4) {
+      const stEl = document.getElementById('automatch-status');
+      if (stEl) stEl.textContent = 'Auto-matching for ' + still.name + '...';
+      await autoMatch(true);
+    }
+  }, 1000);
+}
+
+function closeFinishModal() {
+  document.getElementById('finish-modal').classList.add('hidden');
+  finishState = { courtId: null, selectedPairIndex: null };
+}
+
+// ════════════════════════════════════════════════
+// MANUAL ASSIGN MODAL
+// ════════════════════════════════════════════════
+function openAssignModal(courtId) {
+  assignState = { courtId, selected: new Set() };
+  const court   = courts.find(c => c.id === courtId);
+  const waiting = players.filter(p => p.status === 'waiting');
+  (court.player_ids || []).forEach(id => assignState.selected.add(id));
+  document.getElementById('assign-court-label').textContent = 'Assigning to: ' + court.name;
+  document.getElementById('assign-error').classList.add('hidden');
+  renderAssignList(waiting);
+  document.getElementById('assign-modal').classList.remove('hidden');
+}
+
+function renderAssignList(waiting) {
+  const el      = document.getElementById('assign-player-list');
+  const court   = courts.find(c => c.id === assignState.courtId);
+  const cpids   = court?.player_ids || [];
+  const onCourt = cpids.map(id => getPlayer(id)).filter(Boolean);
+  const all     = [...onCourt.filter(p => !waiting.find(w => w.id === p.id)), ...waiting];
+  if (!all.length) { el.innerHTML = `<div class="text-green-700 text-sm text-center py-3">No players available</div>`; return; }
+  el.innerHTML = all.map(p => `
+    <label class="flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer hover:bg-green-950/40 transition-colors">
+      <input type="checkbox" value="${p.id}" ${assignState.selected.has(p.id) ? 'checked' : ''}
+        onchange="toggleAssign('${p.id}', this.checked)" class="accent-pickle-500 w-4 h-4" />
+      <span class="text-sm text-green-200 flex-1">${esc(p.name)}</span>
+      <span class="text-xs text-green-700">${p.games_played}g</span>
+    </label>
+  `).join('');
+}
+
+function toggleAssign(id, checked) {
+  if (checked) assignState.selected.add(id);
+  else         assignState.selected.delete(id);
+}
+
+async function confirmAssign() {
+  if (assignState.selected.size !== 4) { document.getElementById('assign-error').classList.remove('hidden'); return; }
+  document.getElementById('assign-error').classList.add('hidden');
+  const court    = courts.find(c => c.id === assignState.courtId);
+  const prevPids = (court?.player_ids || []).filter(id => !assignState.selected.has(id));
+  if (prevPids.length) await db.from('players').update({ status: 'waiting' }).in('id', prevPids);
+  await assignPlayersToCourt(assignState.courtId, [...assignState.selected]);
+  closeAssignModal();
+  toast('Players assigned!', 'success');
+}
+
+function closeAssignModal() { document.getElementById('assign-modal').classList.add('hidden'); }
+
+// ════════════════════════════════════════════════
+// VIEW SWITCHING & AUTH
+// ════════════════════════════════════════════════
+function switchView(view) {
+  if (view === 'admin' && !adminUnlocked) {
+    document.getElementById('admin-gate').classList.remove('hidden');
+    document.getElementById('admin-pw-input').focus();
+    return;
+  }
+  applyView(view);
+}
+
+function applyView(view) {
+  document.getElementById('view-player').classList.toggle('hidden', view !== 'player');
+  document.getElementById('view-admin').classList.toggle('hidden',  view !== 'admin');
+  document.getElementById('tab-player').classList.toggle('active',        view === 'player');
+  document.getElementById('tab-admin').classList.toggle('active',         view === 'admin');
+  document.getElementById('tab-player').classList.toggle('text-pickle-400', view === 'player');
+  document.getElementById('tab-admin').classList.toggle('text-pickle-400',  view === 'admin');
+  if (view === 'admin') { renderAdminCourts(); renderAdminWaitlist(); }
+}
+
+function checkAdminPw() {
+  const pw = document.getElementById('admin-pw-input').value;
+  if (pw === ADMIN_PASSWORD) {
+    adminUnlocked = true;
+    document.getElementById('admin-gate').classList.add('hidden');
+    document.getElementById('admin-pw-input').value = '';
+    document.getElementById('pw-error').classList.add('hidden');
+    applyView('admin');
+  } else {
+    document.getElementById('pw-error').classList.remove('hidden');
+    document.getElementById('admin-pw-input').select();
+  }
+}
+
+function cancelAdminGate() {
+  document.getElementById('admin-gate').classList.add('hidden');
+  document.getElementById('admin-pw-input').value = '';
+  document.getElementById('pw-error').classList.add('hidden');
+}
+
+document.getElementById('admin-pw-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') checkAdminPw();
+});
+
+// ════════════════════════════════════════════════
+// UTILITIES
+// ════════════════════════════════════════════════
+function esc(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function setLoading(id, on) {
+  const btn = document.getElementById(id);
+  if (!btn) return;
+  if (on)  { btn.dataset.origText = btn.innerHTML; btn.innerHTML = '<span class="spinner"></span>'; btn.disabled = true; }
+  else     { btn.innerHTML = btn.dataset.origText || btn.innerHTML; btn.disabled = false; }
+}
+
+function toast(msg, type) {
+  type = type || 'success';
+  const colors = { success:'bg-pickle-900 border-pickle-700 text-pickle-300', warn:'bg-yellow-950 border-yellow-800 text-yellow-300', error:'bg-red-950 border-red-800 text-red-300' };
+  const el = document.createElement('div');
+  el.className = 'toast pointer-events-auto border rounded-xl px-4 py-2.5 text-sm font-medium shadow-xl ' + (colors[type] || colors.success);
+  el.innerHTML = msg;
+  document.getElementById('toast-container').appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+
+// BOOT
+init();
+</script>
+</body>
+</html>

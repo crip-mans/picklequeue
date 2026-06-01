@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PickleQueue</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { display:['Bebas Neue','cursive'], body:['DM Sans','sans-serif'] },
+          colors: {
+            pickle: { 50:'#f0fdf0',100:'#dcfce0',200:'#bbf7c4',300:'#86ef9a',400:'#4ade68',500:'#22c544',600:'#16a336',700:'#15802d',800:'#166528',900:'#145323' },
+            court:'#1a2e1a', ink:'#0d1a0d',
+          },
+        },
+      },
+    };
+  </script>
+
+  <!-- Shared Supabase config, state & helpers -->
+  <script src="supabase.js"></script>
+  <script>
+  // This safely bridges Vercel's environment variables to your frontend script
+  window.SUPABASE_URL = "" || "%SUPABASE_URL%";
+  window.SUPABASE_ANON = "" || "%SUPABASE_ANON%";
+  window.ADMIN_PASSWORD = "" || "%ADMIN_PASSWORD%";
+</script>
+
+<script src="supabase.js"></script>
+</head>
+
+<body class="text-green-100 min-h-screen">
+
+<!-- TOAST -->
+<div id="toast-container" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+<!-- HEADER — no admin link exposed here -->
+<header class="border-b border-green-900/50 bg-ink/80 backdrop-blur-sm sticky top-0 z-40">
+  <div class="max-w-5xl mx-auto px-4 py-3 flex items-center gap-3">
+    <div class="w-8 h-8 rounded-full bg-pickle-500 flex items-center justify-center text-ink font-bold">&#127955;</div>
+    <span class="display-font text-2xl tracking-wider text-pickle-400">PickleQueue</span>
+    <span class="flex items-center gap-1.5 text-xs text-green-600 ml-1">
+      <span class="live-dot w-1.5 h-1.5 rounded-full bg-pickle-500 inline-block"></span>LIVE
+    </span>
+    <!-- Queue status pill: shows current count vs max -->
+    <div id="queue-status-pill" class="ml-auto hidden">
+      <span id="queue-status-text" class="text-xs px-3 py-1 rounded-full border font-medium"></span>
+    </div>
+  </div>
+</header>
+
+<!-- MAIN -->
+<main class="max-w-5xl mx-auto px-4 py-6 flex flex-col gap-6">
+
+  <!-- ── REGISTER FORM ─────────────────────────────
+       Shows a queue-full banner when max_players reached.
+       Shows a "not open yet" banner when below min_players. -->
+  <section>
+    <div class="bg-court border border-green-900/60 rounded-2xl p-5 max-w-md">
+      <h2 class="display-font text-2xl text-pickle-400 mb-1">Join the Queue</h2>
+      <p class="text-green-600 text-xs mb-4">Enter your name to get in line. You'll be matched when a court opens.</p>
+
+      <!-- Queue full notice (shown when at/above max) -->
+      <div id="queue-full-notice" class="hidden mb-3 bg-yellow-950/60 border border-yellow-800/50 rounded-xl px-4 py-3">
+        <p class="text-yellow-300 text-sm font-semibold">&#x26A0; Queue is full</p>
+        <p id="queue-full-sub" class="text-yellow-600 text-xs mt-0.5"></p>
+      </div>
+
+      <div class="flex gap-2">
+        <input id="player-name-input" type="text" placeholder="Your name or nickname" maxlength="30"
+          class="input-glow flex-1 bg-ink border border-green-900 rounded-xl px-4 py-2.5 text-green-100 text-sm placeholder-green-800"
+          onkeydown="if(event.key==='Enter') registerPlayer()" />
+        <button onclick="registerPlayer()" id="register-btn"
+          class="bg-pickle-600 hover:bg-pickle-500 active:scale-95 text-white font-semibold px-5 py-2.5 rounded-xl text-sm transition-all">
+          Join
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── ON DECK BANNER ───────────────────────────
+       Shows next 4 players to be called.
+       Only visible when an open court exists + players waiting. -->
+  <section id="up-next-section" class="hidden">
+    <div class="up-next-banner shine-sweep relative overflow-hidden
+                bg-gradient-to-br from-pickle-900/70 via-green-950 to-ink
+                border border-pickle-600/50 rounded-2xl p-5">
+
+      <div class="flex items-center justify-between mb-1">
+        <div class="flex items-center gap-2.5">
+          <span class="live-dot w-2.5 h-2.5 rounded-full bg-pickle-400 inline-block shrink-0"></span>
+          <span class="display-font text-3xl text-pickle-300 tracking-wide leading-none">On Deck</span>
+        </div>
+        <span class="on-deck-badge text-xs font-bold bg-pickle-600/30 border border-pickle-500/50 text-pickle-300 px-2.5 py-1 rounded-full tracking-wide">
+          GET READY
+        </span>
+      </div>
+
+      <p class="text-green-500 text-xs mb-4 pl-[1.05rem] ml-2.5">
+        These players are next up — start warming up now!
+      </p>
+
+      <div id="up-next-players" class="grid grid-cols-2 sm:grid-cols-4 gap-3"></div>
+
+      <p id="up-next-court" class="hidden mt-3 text-center text-xs text-green-600">
+        Heading to <span id="up-next-court-name" class="text-pickle-400 font-semibold"></span>
+      </p>
+
+      <div class="pointer-events-none absolute -top-8 -right-8 w-40 h-40 rounded-full bg-pickle-500/10 blur-2xl"></div>
+    </div>
+  </section>
+
+  <!-- ── COURTS + WAITLIST ─────────────────── -->
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+    <section>
+      <div class="flex items-center gap-2 mb-3">
+        <h2 class="display-font text-xl text-green-300">Active Courts</h2>
+        <span id="courts-count" class="bg-green-950 text-green-500 text-xs px-2 py-0.5 rounded-full font-medium">0</span>
+      </div>
+      <div id="courts-list" class="flex flex-col gap-3">
+        <div class="text-green-700 text-sm py-6 text-center border border-dashed border-green-900 rounded-xl">No courts yet</div>
+      </div>
+    </section>
+
+    <section>
+      <div class="flex items-center gap-2 mb-3">
+        <h2 class="display-font text-xl text-green-300">Waiting Queue</h2>
+        <span id="waitlist-count" class="bg-green-950 text-green-500 text-xs px-2 py-0.5 rounded-full font-medium">0</span>
+      </div>
+      <div class="bg-court border border-green-900/60 rounded-2xl overflow-hidden">
+        <div class="grid grid-cols-12 text-xs text-green-700 uppercase tracking-wider px-4 py-2 border-b border-green-900/40">
+          <span class="col-span-1">#</span>
+          <span class="col-span-7">Player</span>
+          <span class="col-span-4 text-right">Games</span>
+        </div>
+        <div id="waitlist-body" class="divide-y divide-green-900/30 max-h-[420px] overflow-y-auto">
+          <div class="text-green-700 text-sm py-8 text-center">Queue is empty — be first!</div>
+        </div>
+      </div>
+    </section>
+
+  </div>
+</main>
+
+<script>
+injectSharedStyles();
+
+// ── INIT ─────────────────────────────────────────
+async function init() {
+  await Promise.all([fetchPlayers(), fetchCourts(), fetchSettings()]);
+  renderAll();
+  subscribeRealtime();
+}
+
+function subscribeRealtime() {
+  db.channel('players:player-page')
+    .on('postgres_changes', { event:'*', schema:'public', table:'players' }, async () => {
+      await fetchPlayers(); renderAll();
+    }).subscribe();
+  db.channel('courts:player-page')
+    .on('postgres_changes', { event:'*', schema:'public', table:'courts' }, async () => {
+      await fetchCourts(); renderAll();
+    }).subscribe();
+  db.channel('settings:player-page')
+    .on('postgres_changes', { event:'*', schema:'public', table:'settings' }, async () => {
+      await fetchSettings(); renderAll();
+    }).subscribe();
+}
+
+function renderAll() {
+  renderQueueStatus();
+  renderCourts();
+  renderWaitlist();
+  renderUpNext();
+}
+
+// ── QUEUE STATUS PILL in header ───────────────────
+function renderQueueStatus() {
+  const total  = players.length;
+  const max    = settings.max_players;
+  const pill   = document.getElementById('queue-status-pill');
+  const text   = document.getElementById('queue-status-text');
+  const notice = document.getElementById('queue-full-notice');
+  const sub    = document.getElementById('queue-full-sub');
+  const btn    = document.getElementById('register-btn');
+
+  pill.classList.remove('hidden');
+
+  const isFull = total >= max;
+
+  text.textContent = total + ' / ' + max + ' players';
+  text.className = 'text-xs px-3 py-1 rounded-full border font-medium ' +
+    (isFull
+      ? 'bg-yellow-950/60 border-yellow-800/50 text-yellow-300'
+      : 'bg-green-950 border-green-900 text-green-500');
+
+  if (isFull) {
+    notice.classList.remove('hidden');
+    sub.textContent = 'Maximum of ' + max + ' players reached. Check back soon!';
+    btn.disabled = true;
+    btn.classList.add('opacity-40', 'cursor-not-allowed');
+    btn.classList.remove('hover:bg-pickle-500');
+  } else {
+    notice.classList.add('hidden');
+    btn.disabled = false;
+    btn.classList.remove('opacity-40', 'cursor-not-allowed');
+    btn.classList.add('hover:bg-pickle-500');
+  }
+}
+
+// ── COURTS ───────────────────────────────────────
+function renderCourts() {
+  const el = document.getElementById('courts-list');
+  document.getElementById('courts-count').textContent = courts.length;
+  if (!courts.length) {
+    el.innerHTML = `<div class="text-green-700 text-sm py-6 text-center border border-dashed border-green-900 rounded-xl">No courts yet</div>`;
+    return;
+  }
+  el.innerHTML = courts.map(court => {
+    const pids  = court.player_ids || [];
+    const active = pids.length === 4;
+    const ps    = pids.map(id => getPlayer(id)).filter(Boolean);
+    const teamA = ps.slice(0,2), teamB = ps.slice(2,4);
+    return `
+    <div class="court-card bg-court border border-green-900/60 rounded-2xl p-4">
+      <div class="flex items-center justify-between mb-3">
+        <span class="display-font text-lg text-green-200">${esc(court.name)}</span>
+        <span class="text-xs px-2 py-0.5 rounded-full font-medium ${active ? 'bg-pickle-900/50 text-pickle-400 border border-pickle-700/40' : 'bg-green-950 text-green-600 border border-green-900'}">
+          ${active ? '&#9679; Playing' : '&#9675; Open'}
+        </span>
+      </div>
+      ${active ? `
+        <div class="grid grid-cols-2 gap-2">
+          <div class="bg-ink/50 rounded-xl p-3">
+            <div class="text-xs text-green-700 uppercase mb-1.5 font-medium">Team A</div>
+            ${teamA.map(p=>`<div class="text-sm text-green-200 font-medium">${esc(p.name)}</div>`).join('')}
+          </div>
+          <div class="bg-ink/50 rounded-xl p-3">
+            <div class="text-xs text-green-700 uppercase mb-1.5 font-medium">Team B</div>
+            ${teamB.map(p=>`<div class="text-sm text-green-200 font-medium">${esc(p.name)}</div>`).join('')}
+          </div>
+        </div>
+      ` : `<div class="text-green-700 text-sm text-center py-2">Waiting for players...</div>`}
+    </div>`;
+  }).join('');
+}
+
+// ── WAITLIST ─────────────────────────────────────
+function renderWaitlist() {
+  const waiting = players.filter(p => p.status === 'waiting');
+  document.getElementById('waitlist-count').textContent = waiting.length;
+  const el = document.getElementById('waitlist-body');
+  if (!waiting.length) {
+    el.innerHTML = `<div class="text-green-700 text-sm py-8 text-center">Queue is empty — be first!</div>`;
+    return;
+  }
+  const topIds = getNextFourIds(waiting);
+  el.innerHTML = waiting.map((p, i) => {
+    const isNext = topIds.includes(p.id);
+    return `
+    <div class="waitlist-row grid grid-cols-12 px-4 py-2.5 transition-colors items-center ${isNext ? 'bg-pickle-900/20' : ''}">
+      <span class="col-span-1 text-green-700 text-sm font-mono">${i+1}</span>
+      <span class="col-span-7 text-sm font-medium truncate ${isNext ? 'text-pickle-300' : 'text-green-200'}">
+        ${esc(p.name)}
+        ${isNext ? `<span class="ml-1.5 text-xs bg-pickle-900/60 border border-pickle-700/40 text-pickle-400 px-1.5 py-0.5 rounded-full font-bold">Next</span>` : ''}
+      </span>
+      <span class="col-span-4 text-right">
+        <span class="text-xs ${p.games_played === 0 ? 'text-pickle-400 font-bold' : 'text-green-500'}">
+          ${p.games_played} game${p.games_played !== 1 ? 's' : ''}
+        </span>
+      </span>
+    </div>`;
+  }).join('');
+}
+
+// ── ON DECK BANNER ───────────────────────────────
+function renderUpNext() {
+  const waiting   = players.filter(p => p.status === 'waiting');
+  const section   = document.getElementById('up-next-section');
+  const openCourt = courts.find(c => !c.player_ids || c.player_ids.length < 4);
+  if (!waiting.length || !openCourt) { section.classList.add('hidden'); return; }
+
+  const top = getNextFourIds(waiting).map(id => waiting.find(p => p.id === id)).filter(Boolean);
+  document.getElementById('up-next-players').innerHTML = top.map((p, i) => `
+    <div class="up-next-player flex flex-col items-center gap-1 bg-ink/60 border border-pickle-800/60 rounded-xl px-3 py-3 text-center"
+         style="animation-delay:${i*0.07}s">
+      <span class="display-font text-3xl text-pickle-500 leading-none">${i+1}</span>
+      <span class="text-sm font-bold text-green-100 truncate w-full">${esc(p.name)}</span>
+      <span class="text-xs ${p.games_played === 0 ? 'text-pickle-400 font-bold' : 'text-green-600'}">
+        ${p.games_played === 0 ? '&#x2B50; New!' : p.games_played + 'g'}
+      </span>
+    </div>
+  `).join('');
+
+  document.getElementById('up-next-court-name').textContent = openCourt.name;
+  document.getElementById('up-next-court').classList.remove('hidden');
+  section.classList.remove('hidden');
+}
+
+// ── REGISTER PLAYER ──────────────────────────────
+async function registerPlayer() {
+  const input = document.getElementById('player-name-input');
+  const name  = input.value.trim();
+  if (!name) { toast('Enter a name first!', 'warn'); return; }
+
+  // Max players check
+  if (players.length >= settings.max_players) {
+    toast('Queue is full! Maximum of ' + settings.max_players + ' players reached.', 'warn');
+    return;
+  }
+
+  const exists = players.some(p => p.name.toLowerCase() === name.toLowerCase());
+  if (exists) { toast('That name is already in the system!', 'warn'); return; }
+
+  setLoading('register-btn', true);
+  const { error } = await db.from('players').insert({ name, games_played: 0, status: 'waiting' });
+  setLoading('register-btn', false);
+  if (error) { toast('Error joining queue — check Supabase credentials.', 'error'); console.error(error); return; }
+  input.value = '';
+  toast(name + ' joined the queue! &#127955;', 'success');
+}
+
+init();
+</script>
+<script src="env-config.js"></script>
+<script src="supabase.js"></script>
+</body>
+</html>

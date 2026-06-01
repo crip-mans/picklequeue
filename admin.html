@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PickleQueue — Admin</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { display:['Bebas Neue','cursive'], body:['DM Sans','sans-serif'] },
+          colors: {
+            pickle: { 50:'#f0fdf0',100:'#dcfce0',200:'#bbf7c4',300:'#86ef9a',400:'#4ade68',500:'#22c544',600:'#16a336',700:'#15802d',800:'#166528',900:'#145323' },
+            court:'#1a2e1a', ink:'#0d1a0d',
+          },
+        },
+      },
+    };
+  </script>
+
+  <!-- Shared Supabase config, state & helpers -->
+  <script src="supabase.js"></script>
+  <script>
+  // This safely bridges Vercel's environment variables to your frontend script
+  window.SUPABASE_URL = "" || "%SUPABASE_URL%";
+  window.SUPABASE_ANON = "" || "%SUPABASE_ANON%";
+  window.ADMIN_PASSWORD = "" || "%ADMIN_PASSWORD%";
+</script>
+
+<script src="supabase.js"></script>
+</head>
+
+<body class="text-green-100 min-h-screen">
+
+<!-- TOAST -->
+<div id="toast-container" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+<!-- ════════════════════════════════════════════════
+     PASSWORD GATE — full-screen until unlocked
+════════════════════════════════════════════════ -->
+<div id="admin-gate" class="fixed inset-0 z-50 bg-ink flex items-center justify-center p-4">
+  <div class="bg-court border border-green-900 rounded-2xl p-7 w-full max-w-sm shadow-2xl">
+    <div class="flex items-center gap-3 mb-5">
+      <div class="w-9 h-9 rounded-full bg-pickle-500 flex items-center justify-center text-ink font-bold">&#127955;</div>
+      <span class="display-font text-2xl tracking-wider text-pickle-400">PickleQueue</span>
+    </div>
+    <h2 class="display-font text-3xl text-green-200 mb-1">Admin Access</h2>
+    <p class="text-green-600 text-sm mb-5">Enter the admin password to manage courts and matches.</p>
+    <input id="admin-pw-input" type="password" placeholder="Password" autocomplete="current-password"
+      class="input-glow w-full bg-ink border border-green-900 rounded-xl px-4 py-3 text-green-100 text-sm mb-3 placeholder-green-800" />
+    <button onclick="checkAdminPw()"
+      class="w-full bg-pickle-600 hover:bg-pickle-500 text-white font-bold py-3 rounded-xl text-sm transition-colors">
+      Unlock Dashboard
+    </button>
+    <p id="pw-error" class="text-red-400 text-xs mt-3 hidden text-center">Incorrect password. Try again.</p>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════
+     HEADER (hidden until unlocked)
+════════════════════════════════════════════════ -->
+<header id="admin-header" class="hidden border-b border-green-900/50 bg-ink/80 backdrop-blur-sm sticky top-0 z-40">
+  <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="w-8 h-8 rounded-full bg-pickle-500 flex items-center justify-center text-ink font-bold">&#127955;</div>
+      <span class="display-font text-2xl tracking-wider text-pickle-400">PickleQueue</span>
+      <span class="text-xs bg-pickle-900/60 text-pickle-400 border border-pickle-700/40 px-2 py-0.5 rounded-full font-bold">ADMIN</span>
+    </div>
+    <span class="flex items-center gap-1.5 text-xs text-green-600">
+      <span class="live-dot w-1.5 h-1.5 rounded-full bg-pickle-500 inline-block"></span>LIVE
+    </span>
+  </div>
+</header>
+
+<!-- ════════════════════════════════════════════════
+     MAIN (hidden until unlocked)
+════════════════════════════════════════════════ -->
+<main id="admin-main" class="hidden max-w-6xl mx-auto px-4 py-6">
+  <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
+
+    <!-- ── LEFT COLUMN: auto-match + courts ───── -->
+    <div class="xl:col-span-2 flex flex-col gap-6">
+
+      <!-- Auto-match status card -->
+      <div class="bg-court border border-pickle-700/40 rounded-2xl p-5">
+        <div class="flex flex-col sm:flex-row sm:items-start gap-4">
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 flex-wrap mb-1">
+              <h2 class="display-font text-2xl text-pickle-400 leading-none">Auto-Match</h2>
+              <span class="text-xs px-2 py-0.5 rounded-full font-bold bg-pickle-900/60 text-pickle-300 border border-pickle-600/50 flex items-center gap-1">
+                <span class="live-dot w-1.5 h-1.5 rounded-full bg-pickle-400 inline-block"></span>ACTIVE
+              </span>
+            </div>
+            <p class="text-green-600 text-xs mb-2">
+              Fires automatically when a match finishes. Prioritises 0-game &amp; fewest-game players.
+            </p>
+            <div class="flex items-start gap-1.5 bg-ink/40 border border-green-900/40 rounded-xl px-3 py-2">
+              <span class="text-green-700 text-xs shrink-0 mt-0.5">&#x25BA;</span>
+              <p id="automatch-status" class="text-green-500 text-xs italic">Watching for open courts...</p>
+            </div>
+          </div>
+          <button onclick="autoMatch(false)" id="auto-match-btn"
+            class="flex items-center gap-2 bg-green-950 hover:bg-green-900 border border-green-800 active:scale-95 text-green-400 font-semibold px-4 py-2.5 rounded-xl text-sm transition-all whitespace-nowrap shrink-0">
+            &#x26A1; Force Now
+          </button>
+        </div>
+      </div>
+
+      <!-- Courts list -->
+      <div>
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="display-font text-xl text-green-300">Courts</h2>
+          <button onclick="openAddCourt()"
+            class="text-xs bg-green-950 hover:bg-green-900 border border-green-800 text-green-400 px-3 py-1.5 rounded-lg transition-colors">
+            + Add Court
+          </button>
+        </div>
+        <div id="admin-courts-list" class="flex flex-col gap-4"></div>
+      </div>
+
+    </div>
+
+    <!-- ── RIGHT COLUMN: settings + add court + all players ── -->
+    <div class="flex flex-col gap-4">
+
+      <!-- ════════════════════════════════════════
+           PLAYER LIMITS SETTINGS CARD
+           Admin sets min & max number of players.
+           Min = show a "not enough players" warning on player page.
+           Max = block new joins when reached.
+      ════════════════════════════════════════ -->
+      <div class="bg-court border border-green-900/60 rounded-2xl p-4">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="display-font text-lg text-green-300">Player Limits</h3>
+          <span class="text-xs text-green-700">Auto-saves</span>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3 mb-3">
+          <!-- Min players -->
+          <div>
+            <label class="block text-xs text-green-600 mb-1.5 font-medium uppercase tracking-wide">Min Players</label>
+            <div class="flex items-center gap-1">
+              <button onclick="adjustLimit('min', -1)"
+                class="w-8 h-8 rounded-lg bg-ink border border-green-900 text-green-400 hover:bg-green-950 transition-colors text-lg leading-none flex items-center justify-center">&#x2212;</button>
+              <input id="min-players-input" type="number" min="1" max="100" value="2"
+                class="input-glow flex-1 min-w-0 bg-ink border border-green-900 rounded-lg px-2 py-1.5 text-green-100 text-sm text-center"
+                onchange="saveLimit('min', this.value)" />
+              <button onclick="adjustLimit('min', 1)"
+                class="w-8 h-8 rounded-lg bg-ink border border-green-900 text-green-400 hover:bg-green-950 transition-colors text-lg leading-none flex items-center justify-center">&#x2B;</button>
+            </div>
+            <p class="text-green-800 text-xs mt-1">Min to open queue</p>
+          </div>
+
+          <!-- Max players -->
+          <div>
+            <label class="block text-xs text-green-600 mb-1.5 font-medium uppercase tracking-wide">Max Players</label>
+            <div class="flex items-center gap-1">
+              <button onclick="adjustLimit('max', -1)"
+                class="w-8 h-8 rounded-lg bg-ink border border-green-900 text-green-400 hover:bg-green-950 transition-colors text-lg leading-none flex items-center justify-center">&#x2212;</button>
+              <input id="max-players-input" type="number" min="1" max="500" value="30"
+                class="input-glow flex-1 min-w-0 bg-ink border border-green-900 rounded-lg px-2 py-1.5 text-green-100 text-sm text-center"
+                onchange="saveLimit('max', this.value)" />
+              <button onclick="adjustLimit('max', 1)"
+                class="w-8 h-8 rounded-lg bg-ink border border-green-900 text-green-400 hover:bg-green-950 transition-colors text-lg leading-none flex items-center justify-center">&#x2B;</button>
+            </div>
+            <p class="text-green-800 text-xs mt-1">Max before queue locks</p>
+          </div>
+        </div>
+
+        <!-- Live summary -->
+        <div id="limits-summary" class="bg-ink/40 border border-green-900/40 rounded-xl px-3 py-2 text-xs text-green-600"></div>
+      </div>
+
+      <!-- Add court form (hidden by default) -->
+      <div id="add-court-form" class="hidden bg-court border border-green-900/60 rounded-2xl p-4">
+        <h3 class="font-semibold text-green-300 mb-3 text-sm">New Court</h3>
+        <input id="court-name-input" type="text" placeholder="Court name (e.g. Court 1)"
+          class="input-glow w-full bg-ink border border-green-900 rounded-xl px-4 py-2.5 text-green-100 text-sm mb-2 placeholder-green-800"
+          onkeydown="if(event.key==='Enter') addCourt()" />
+        <div class="flex gap-2">
+          <button onclick="addCourt()" class="flex-1 bg-pickle-600 hover:bg-pickle-500 text-white text-sm font-semibold py-2 rounded-xl transition-colors">Add</button>
+          <button onclick="closeAddCourt()" class="flex-1 bg-green-950 hover:bg-green-900 text-green-400 text-sm font-semibold py-2 rounded-xl transition-colors">Cancel</button>
+        </div>
+      </div>
+
+      <!-- All players panel -->
+      <div class="bg-court border border-green-900/60 rounded-2xl overflow-hidden">
+        <div class="px-4 py-3 border-b border-green-900/40 flex items-center justify-between gap-2">
+          <div class="flex items-center gap-2">
+            <span class="display-font text-lg text-green-300">All Players</span>
+            <span id="admin-player-count" class="bg-green-950 text-green-500 text-xs px-2 py-0.5 rounded-full">0</span>
+          </div>
+          <button onclick="clearAllPlayers()"
+            class="text-xs bg-red-950 hover:bg-red-900 border border-red-900/60 text-red-400 px-2.5 py-1.5 rounded-lg transition-colors font-medium">
+            &#x1F5D1; Clear All
+          </button>
+        </div>
+        <div id="admin-player-body" class="divide-y divide-green-900/30 max-h-[480px] overflow-y-auto"></div>
+      </div>
+
+    </div>
+  </div>
+</main>
+
+<!-- ════════════════════════════════════════════════
+     FINISH MATCH MODAL
+════════════════════════════════════════════════ -->
+<div id="finish-modal" class="hidden fixed inset-0 z-50 bg-ink/80 backdrop-blur flex items-center justify-center p-4">
+  <div class="bg-court border border-green-900 rounded-2xl p-6 w-full max-w-md shadow-2xl">
+    <h2 class="display-font text-3xl text-pickle-400 mb-1">Finish Match</h2>
+    <p id="finish-court-name" class="text-green-600 text-sm mb-4"></p>
+    <p class="text-xs text-green-500 uppercase tracking-wider mb-2 font-medium">Select the winning pair</p>
+    <div class="flex flex-col gap-2 mb-5" id="finish-pairs"></div>
+    <div class="flex gap-2">
+      <button onclick="finishMatch()" class="flex-1 bg-pickle-600 hover:bg-pickle-500 text-white font-bold py-2.5 rounded-xl text-sm transition-colors">Confirm & Clear Court</button>
+      <button onclick="closeFinishModal()" class="flex-1 bg-green-950 hover:bg-green-900 text-green-400 font-semibold py-2.5 rounded-xl text-sm transition-colors">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════
+     MANUAL ASSIGN MODAL
+════════════════════════════════════════════════ -->
+<div id="assign-modal" class="hidden fixed inset-0 z-50 bg-ink/80 backdrop-blur flex items-center justify-center p-4">
+  <div class="bg-court border border-green-900 rounded-2xl p-6 w-full max-w-md shadow-2xl">
+    <h2 class="display-font text-3xl text-pickle-400 mb-1">Assign Players</h2>
+    <p id="assign-court-label" class="text-green-600 text-sm mb-4"></p>
+    <p class="text-xs text-green-500 uppercase tracking-wider mb-2 font-medium">Select exactly 4 players</p>
+    <div id="assign-player-list" class="flex flex-col gap-1 max-h-64 overflow-y-auto mb-4 border border-green-900/40 rounded-xl p-2"></div>
+    <p id="assign-error" class="text-red-400 text-xs mb-2 hidden">Please select exactly 4 players.</p>
+    <div class="flex gap-2">
+      <button onclick="confirmAssign()" class="flex-1 bg-pickle-600 hover:bg-pickle-500 text-white font-bold py-2.5 rounded-xl text-sm transition-colors">Assign to Court</button>
+      <button onclick="closeAssignModal()" class="flex-1 bg-green-950 hover:bg-green-900 text-green-400 font-semibold py-2.5 rounded-xl text-sm transition-colors">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+injectSharedStyles();
+
+// ── LOCAL STATE ───────────────────────────────────
+let finishState = { courtId: null, selectedPairIndex: null };
+let assignState = { courtId: null, selected: new Set() };
+
+// ── AUTH ──────────────────────────────────────────
+document.getElementById('admin-pw-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') checkAdminPw();
+});
+
+function checkAdminPw() {
+  const pw = document.getElementById('admin-pw-input').value;
+  if (pw === ADMIN_PASSWORD) {
+    document.getElementById('admin-gate').classList.add('hidden');
+    document.getElementById('admin-header').classList.remove('hidden');
+    document.getElementById('admin-main').classList.remove('hidden');
+    init();
+  } else {
+    document.getElementById('pw-error').classList.remove('hidden');
+    document.getElementById('admin-pw-input').select();
+  }
+}
+
+// ── INIT ──────────────────────────────────────────
+async function init() {
+  await Promise.all([fetchPlayers(), fetchCourts(), fetchSettings()]);
+  syncSettingsUI();
+  renderAll();
+  subscribeRealtime();
+}
+
+function subscribeRealtime() {
+  db.channel('players:admin')
+    .on('postgres_changes', { event:'*', schema:'public', table:'players' }, async () => {
+      await fetchPlayers(); renderAll();
+    }).subscribe();
+  db.channel('courts:admin')
+    .on('postgres_changes', { event:'*', schema:'public', table:'courts' }, async () => {
+      await fetchCourts(); renderAll();
+    }).subscribe();
+  db.channel('settings:admin')
+    .on('postgres_changes', { event:'*', schema:'public', table:'settings' }, async () => {
+      await fetchSettings(); syncSettingsUI(); renderAll();
+    }).subscribe();
+}
+
+function renderAll() {
+  renderAdminCourts();
+  renderAdminPlayers();
+  renderLimitsSummary();
+}
+
+// ── LIMITS SETTINGS ───────────────────────────────
+// Syncs the input fields to match DB values on load/change
+function syncSettingsUI() {
+  document.getElementById('min-players-input').value = settings.min_players;
+  document.getElementById('max-players-input').value = settings.max_players;
+  renderLimitsSummary();
+}
+
+function renderLimitsSummary() {
+  const total   = players.length;
+  const waiting = players.filter(p => p.status === 'waiting').length;
+  const el      = document.getElementById('limits-summary');
+  const pct     = settings.max_players > 0 ? Math.round((total / settings.max_players) * 100) : 0;
+
+  let statusColor = 'text-green-600';
+  let statusMsg   = 'Queue open';
+  if (total >= settings.max_players) { statusColor = 'text-yellow-400'; statusMsg = 'Queue FULL — new joins blocked'; }
+  else if (total < settings.min_players) { statusColor = 'text-green-700'; statusMsg = 'Below minimum — waiting for more players'; }
+
+  el.innerHTML = `
+    <div class="flex justify-between mb-1.5">
+      <span>${total} registered &nbsp;·&nbsp; ${waiting} waiting</span>
+      <span class="${statusColor} font-semibold">${statusMsg}</span>
+    </div>
+    <div class="w-full bg-green-950 rounded-full h-1.5 overflow-hidden">
+      <div class="h-full rounded-full transition-all ${total >= settings.max_players ? 'bg-yellow-500' : 'bg-pickle-500'}"
+           style="width:${Math.min(pct,100)}%"></div>
+    </div>
+    <div class="flex justify-between mt-1 text-green-800">
+      <span>Min: ${settings.min_players}</span>
+      <span>${pct}% full</span>
+      <span>Max: ${settings.max_players}</span>
+    </div>`;
+}
+
+// +/- buttons on limit inputs
+function adjustLimit(type, delta) {
+  const inputId = type === 'min' ? 'min-players-input' : 'max-players-input';
+  const input   = document.getElementById(inputId);
+  const newVal  = Math.max(1, parseInt(input.value || 1) + delta);
+  input.value   = newVal;
+  saveLimit(type, newVal);
+}
+
+// Debounce timer for the number inputs
+let limitSaveTimer = null;
+function saveLimit(type, rawVal) {
+  clearTimeout(limitSaveTimer);
+  limitSaveTimer = setTimeout(async () => {
+    const val = parseInt(rawVal);
+    if (isNaN(val) || val < 1) return;
+
+    // Clamp: min can't exceed max and vice versa
+    if (type === 'min') {
+      const maxVal = parseInt(document.getElementById('max-players-input').value) || settings.max_players;
+      if (val > maxVal) {
+        toast('Min cannot be greater than Max.', 'warn');
+        document.getElementById('min-players-input').value = settings.min_players;
+        return;
+      }
+      settings.min_players = val;
+    } else {
+      const minVal = parseInt(document.getElementById('min-players-input').value) || settings.min_players;
+      if (val < minVal) {
+        toast('Max cannot be less than Min.', 'warn');
+        document.getElementById('max-players-input').value = settings.max_players;
+        return;
+      }
+      settings.max_players = val;
+    }
+
+    const key = type === 'min' ? 'min_players' : 'max_players';
+    // Upsert into settings table
+    const { error } = await db.from('settings').upsert({ key, value: String(val) }, { onConflict: 'key' });
+    if (error) { toast('Error saving limit.', 'error'); console.error(error); return; }
+    renderLimitsSummary();
+    toast((type === 'min' ? 'Min' : 'Max') + ' players set to ' + val + '.', 'success');
+  }, 600);
+}
+
+// ── ADMIN COURTS ─────────────────────────────────
+function renderAdminCourts() {
+  const el = document.getElementById('admin-courts-list');
+  if (!courts.length) {
+    el.innerHTML = `<div class="text-green-700 text-sm py-6 text-center border border-dashed border-green-900 rounded-xl">No courts — add one above</div>`;
+    return;
+  }
+  el.innerHTML = courts.map(court => {
+    const pids   = court.player_ids || [];
+    const active = pids.length === 4;
+    const ps     = pids.map(id => getPlayer(id)).filter(Boolean);
+    const teamA  = ps.slice(0,2), teamB = ps.slice(2,4);
+    return `
+    <div class="court-card bg-court border border-green-900/60 rounded-2xl p-4">
+      <div class="flex items-center justify-between mb-3">
+        <span class="display-font text-lg text-green-200">${esc(court.name)}</span>
+        <div class="flex gap-2">
+          <button onclick="openAssignModal('${court.id}')" class="text-xs bg-green-950 hover:bg-green-900 border border-green-800 text-green-400 px-2.5 py-1 rounded-lg transition-colors">Assign</button>
+          <button onclick="removeCourt('${court.id}')"    class="text-xs bg-red-950 hover:bg-red-900 border border-red-900 text-red-400 px-2.5 py-1 rounded-lg transition-colors">Remove</button>
+        </div>
+      </div>
+      ${active ? `
+        <div class="grid grid-cols-2 gap-2 mb-3">
+          <div class="bg-ink/50 rounded-xl p-3">
+            <div class="text-xs text-green-700 uppercase mb-1.5 font-medium">Team A</div>
+            ${teamA.map(p=>`<div class="text-sm text-green-200">${esc(p.name)} <span class="text-green-700 text-xs">(${p.games_played}g)</span></div>`).join('')}
+          </div>
+          <div class="bg-ink/50 rounded-xl p-3">
+            <div class="text-xs text-green-700 uppercase mb-1.5 font-medium">Team B</div>
+            ${teamB.map(p=>`<div class="text-sm text-green-200">${esc(p.name)} <span class="text-green-700 text-xs">(${p.games_played}g)</span></div>`).join('')}
+          </div>
+        </div>
+        <button onclick="openFinishModal('${court.id}')"
+          class="w-full bg-pickle-700 hover:bg-pickle-600 text-white font-semibold py-2 rounded-xl text-sm transition-colors">
+          &#127942; Finish Match
+        </button>
+      ` : `<div class="text-green-700 text-sm text-center py-2">Open — no players assigned</div>`}
+    </div>`;
+  }).join('');
+}
+
+// ── ALL PLAYERS PANEL ─────────────────────────────
+function renderAdminPlayers() {
+  const all = [...players].sort((a, b) => {
+    if (a.status !== b.status) return a.status === 'waiting' ? -1 : 1;
+    if (a.games_played !== b.games_played) return a.games_played - b.games_played;
+    return new Date(a.created_at) - new Date(b.created_at);
+  });
+  document.getElementById('admin-player-count').textContent = all.length;
+  const el = document.getElementById('admin-player-body');
+  if (!all.length) {
+    el.innerHTML = `<div class="text-green-700 text-sm py-6 text-center">No players yet</div>`;
+    return;
+  }
+  el.innerHTML = all.map((p, i) => {
+    const isPlaying = p.status === 'playing';
+    return `
+    <div class="flex items-center justify-between px-4 py-2.5 hover:bg-green-950/30 transition-colors">
+      <div class="flex items-center gap-2 min-w-0">
+        <span class="text-green-700 text-xs font-mono w-5 shrink-0">${i+1}</span>
+        <span class="text-sm truncate ${isPlaying ? 'text-pickle-400 font-semibold' : 'text-green-200'}">${esc(p.name)}</span>
+        <span class="text-xs shrink-0 ${isPlaying ? 'text-pickle-600' : 'text-green-700'}">${p.games_played}g</span>
+        ${isPlaying ? `<span class="text-xs text-pickle-700 shrink-0">&#9679; playing</span>` : ''}
+      </div>
+      <button onclick="removePlayer('${p.id}')"
+        class="ml-2 text-xs text-red-500 hover:text-red-400 transition-colors shrink-0" title="Remove player">&#x2715;</button>
+    </div>`;
+  }).join('');
+}
+
+// ── PLAYER ACTIONS ───────────────────────────────
+async function removePlayer(id) {
+  const p = getPlayer(id);
+  if (!confirm('Remove ' + (p?.name || 'this player') + '?')) return;
+  // If playing, clear their slot on the court first
+  if (p?.status === 'playing') {
+    const court = courts.find(c => (c.player_ids || []).includes(id));
+    if (court) {
+      const updated = (court.player_ids || []).filter(pid => pid !== id);
+      await db.from('courts').update({ player_ids: updated }).eq('id', court.id);
+    }
+  }
+  const { error } = await db.from('players').delete().eq('id', id);
+  if (error) { toast('Error removing player.', 'error'); return; }
+  toast('Player removed.', 'success');
+}
+
+async function clearAllPlayers() {
+  if (!players.length) { toast('No players to clear.', 'warn'); return; }
+  if (!confirm('Remove ALL ' + players.length + ' player(s) and clear all courts? This cannot be undone.')) return;
+  if (courts.length) {
+    await db.from('courts').update({ player_ids: [] }).eq('is_active', true);
+  }
+  const ids = players.map(p => p.id);
+  const { error } = await db.from('players').delete().in('id', ids);
+  if (error) { toast('Error clearing players.', 'error'); return; }
+  toast('All players cleared.', 'success');
+}
+
+// ── COURT ACTIONS ────────────────────────────────
+function openAddCourt() {
+  document.getElementById('add-court-form').classList.remove('hidden');
+  document.getElementById('court-name-input').focus();
+}
+function closeAddCourt() {
+  document.getElementById('add-court-form').classList.add('hidden');
+  document.getElementById('court-name-input').value = '';
+}
+
+async function addCourt() {
+  const input = document.getElementById('court-name-input');
+  const name  = input.value.trim();
+  if (!name) { toast('Enter a court name.', 'warn'); return; }
+  const { error } = await db.from('courts').insert({ name, player_ids: [], is_active: true });
+  if (error) { toast('Error adding court.', 'error'); return; }
+  closeAddCourt();
+  toast(name + ' added!', 'success');
+}
+
+async function removeCourt(id) {
+  const court = courts.find(c => c.id === id);
+  if (!confirm('Remove "' + (court?.name || 'this court') + '"? Players on it return to waiting.')) return;
+  if (court.player_ids?.length) {
+    await db.from('players').update({ status: 'waiting' }).in('id', court.player_ids);
+  }
+  const { error } = await db.from('courts').update({ is_active: false }).eq('id', id);
+  if (error) { toast('Error removing court.', 'error'); return; }
+  toast('Court removed.', 'success');
+}
+
+// ── FINISH MATCH MODAL ───────────────────────────
+function openFinishModal(courtId) {
+  const court = courts.find(c => c.id === courtId);
+  const pids  = court.player_ids || [];
+  const ps    = pids.map(id => getPlayer(id)).filter(Boolean);
+  if (ps.length < 4) { toast('Court must have 4 players.', 'warn'); return; }
+  finishState = { courtId, selectedPairIndex: null };
+  document.getElementById('finish-court-name').textContent = 'Court: ' + court.name;
+  const teamA = ps.slice(0,2), teamB = ps.slice(2,4);
+  document.getElementById('finish-pairs').innerHTML = [teamA, teamB].map((pair, i) => `
+    <label class="flex items-center gap-3 border border-green-900 hover:border-pickle-700 rounded-xl p-3 cursor-pointer transition-colors has-[:checked]:border-pickle-500 has-[:checked]:bg-pickle-900/20">
+      <input type="radio" name="winner-pair" value="${i}" onchange="finishState.selectedPairIndex=${i}" class="accent-pickle-500 w-4 h-4" />
+      <div>
+        <div class="text-xs text-green-600 uppercase mb-0.5 font-medium">Team ${i===0?'A':'B'} wins</div>
+        <div class="text-sm text-green-200">${pair.map(p => esc(p.name)).join(' & ')}</div>
+      </div>
+    </label>
+  `).join('');
+  document.getElementById('finish-modal').classList.remove('hidden');
+}
+
+async function finishMatch() {
+  if (finishState.selectedPairIndex === null) { toast('Select the winning team first.', 'warn'); return; }
+  const court = courts.find(c => c.id === finishState.courtId);
+  const pids  = court.player_ids || [];
+  for (const id of pids) {
+    const p = getPlayer(id);
+    if (p) await db.from('players').update({ games_played: p.games_played + 1, status: 'waiting' }).eq('id', id);
+  }
+  await db.from('courts').update({ player_ids: [] }).eq('id', court.id);
+  closeFinishModal();
+  toast('Match finished! Players back in queue. &#127955;', 'success');
+
+  // Auto-match fires automatically after the court clears
+  setTimeout(async () => {
+    await fetchPlayers();
+    await fetchCourts();
+    const still = courts.find(c => !c.player_ids || c.player_ids.length < 4);
+    const avail = players.filter(p => p.status === 'waiting');
+    if (still && avail.length >= 4) {
+      const stEl = document.getElementById('automatch-status');
+      if (stEl) stEl.textContent = 'Auto-matching for ' + still.name + '...';
+      await autoMatch(true);
+    }
+  }, 1000);
+}
+
+function closeFinishModal() {
+  document.getElementById('finish-modal').classList.add('hidden');
+  finishState = { courtId: null, selectedPairIndex: null };
+}
+
+// ── MANUAL ASSIGN MODAL ──────────────────────────
+function openAssignModal(courtId) {
+  assignState = { courtId, selected: new Set() };
+  const court   = courts.find(c => c.id === courtId);
+  const waiting = players.filter(p => p.status === 'waiting');
+  (court.player_ids || []).forEach(id => assignState.selected.add(id));
+  document.getElementById('assign-court-label').textContent = 'Assigning to: ' + court.name;
+  document.getElementById('assign-error').classList.add('hidden');
+  renderAssignList(waiting);
+  document.getElementById('assign-modal').classList.remove('hidden');
+}
+
+function renderAssignList(waiting) {
+  const el      = document.getElementById('assign-player-list');
+  const court   = courts.find(c => c.id === assignState.courtId);
+  const cpids   = court?.player_ids || [];
+  const onCourt = cpids.map(id => getPlayer(id)).filter(Boolean);
+  const all     = [...onCourt.filter(p => !waiting.find(w => w.id === p.id)), ...waiting];
+  if (!all.length) { el.innerHTML = `<div class="text-green-700 text-sm text-center py-3">No players available</div>`; return; }
+  el.innerHTML = all.map(p => `
+    <label class="flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer hover:bg-green-950/40 transition-colors">
+      <input type="checkbox" value="${p.id}" ${assignState.selected.has(p.id) ? 'checked' : ''}
+        onchange="toggleAssign('${p.id}', this.checked)" class="accent-pickle-500 w-4 h-4" />
+      <span class="text-sm text-green-200 flex-1">${esc(p.name)}</span>
+      <span class="text-xs text-green-700">${p.games_played}g</span>
+    </label>
+  `).join('');
+}
+
+function toggleAssign(id, checked) {
+  if (checked) assignState.selected.add(id);
+  else         assignState.selected.delete(id);
+}
+
+async function confirmAssign() {
+  if (assignState.selected.size !== 4) { document.getElementById('assign-error').classList.remove('hidden'); return; }
+  document.getElementById('assign-error').classList.add('hidden');
+  const court    = courts.find(c => c.id === assignState.courtId);
+  const prevPids = (court?.player_ids || []).filter(id => !assignState.selected.has(id));
+  if (prevPids.length) await db.from('players').update({ status: 'waiting' }).in('id', prevPids);
+  await assignPlayersToCourt(assignState.courtId, [...assignState.selected]);
+  closeAssignModal();
+  toast('Players assigned!', 'success');
+}
+
+function closeAssignModal() { document.getElementById('assign-modal').classList.add('hidden'); }
+</script>
+<script src="env-config.js"></script>
+<script src="supabase.js"></script>
+</body>
+</html>
