@@ -6,6 +6,10 @@
 // ┌─────────────────────────────────────────────────────────┐
 // │  FILL IN YOUR SUPABASE CREDENTIALS BELOW               │
 // └─────────────────────────────────────────────────────────┘
+window.SUPABASE_URL = window.SUPABASE_URL || "%SUPABASE_URL%";
+window.SUPABASE_ANON = window.SUPABASE_ANON || "%SUPABASE_ANON%";
+window.ADMIN_PASSWORD = window.ADMIN_PASSWORD || "%ADMIN_PASSWORD%";
+
 const SUPABASE_URL   = window.SUPABASE_URL || localStorage.getItem('SUPABASE_URL') || '';
 const SUPABASE_ANON  = window.SUPABASE_ANON || localStorage.getItem('SUPABASE_ANON') || '';
 const ADMIN_PASSWORD = window.ADMIN_PASSWORD || localStorage.getItem('ADMIN_PASSWORD') || '';
