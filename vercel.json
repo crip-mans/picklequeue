@@ -2,15 +2,15 @@
   "cleanUrls": true,
   "builds": [
     {
-      "src": "**/*.html",
+      "src": "index.html",
       "use": "@vercel/static"
     },
     {
-      "src": "*.js",
+      "src": "admin/index.html",
       "use": "@vercel/static"
     },
     {
-      "src": "admin/*.html",
+      "src": "supabase.js",
       "use": "@vercel/static"
     }
   ]
