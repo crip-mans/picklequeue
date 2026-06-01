@@ -138,7 +138,7 @@ async function autoMatch(silent) {
 
   const names = picked.map(p => p.name).join(', ');
   const stEl  = document.getElementById('automatch-status');
-  if (stEl) stEl.textContent = 'Last match: ' + names + ' \u2192 ' + openCourt.name;
+  if (stEl) stEl.textContent = 'Current Match: ' + names + ' \u2192 ' + openCourt.name;
 
   if (!silent) {
     setLoading('auto-match-btn', false);
