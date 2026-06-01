@@ -1,7 +1,16 @@
 {
+  "cleanUrls": true,
   "builds": [
     {
       "src": "**/*.html",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "*.js",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "admin/*.html",
       "use": "@vercel/static"
     }
   ]
