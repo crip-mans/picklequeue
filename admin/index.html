@@ -49,8 +49,11 @@
     </div>
     <h2 class="display-font text-3xl text-green-200 mb-1">Admin Access</h2>
     <p class="text-green-600 text-sm mb-5">Enter the admin password to manage courts and matches.</p>
-    <input id="admin-pw-input" type="password" placeholder="Password" autocomplete="current-password"
-      class="input-glow w-full bg-ink border border-green-900 rounded-xl px-4 py-3 text-green-100 text-sm mb-3 placeholder-green-800" />
+    <input id="admin-email-input" type="email" placeholder="Admin Email" autocomplete="username"
+  class="input-glow w-full bg-ink border border-green-900 rounded-xl px-4 py-3 text-green-100 text-sm mb-3 placeholder-green-800" />
+
+<input id="admin-pw-input" type="password" placeholder="Password" autocomplete="current-password"
+  class="input-glow w-full bg-ink border border-green-900 rounded-xl px-4 py-3 text-green-100 text-sm mb-3 placeholder-green-800" />
     <button onclick="checkAdminPw()"
       class="w-full bg-pickle-600 hover:bg-pickle-500 text-white font-bold py-3 rounded-xl text-sm transition-colors">
       Unlock Dashboard
@@ -246,20 +249,43 @@ let finishState = { courtId: null, selectedPairIndex: null };
 let assignState = { courtId: null, selected: new Set() };
 
 // ── AUTH ──────────────────────────────────────────
+// Let users hit Enter on either box to log in quickly
+document.getElementById('admin-email-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') checkAdminPw();
+});
 document.getElementById('admin-pw-input').addEventListener('keydown', e => {
   if (e.key === 'Enter') checkAdminPw();
 });
 
-function checkAdminPw() {
-  const pw = document.getElementById('admin-pw-input').value;
-  if (pw === ADMIN_PASSWORD) {
+async function checkAdminPw() {
+  const emailVal = document.getElementById('admin-email-input').value.trim();
+  const pwVal = document.getElementById('admin-pw-input').value;
+  const errorEl = document.getElementById('pw-error');
+
+  if (!emailVal || !pwVal) {
+    errorEl.textContent = "Please fill in both email and password.";
+    errorEl.classList.remove('hidden');
+    return;
+  }
+
+  // Talk directly to Supabase cloud auth table
+  const { data, error } = await db.auth.signInWithPassword({
+    email: emailVal,
+    password: pwVal
+  });
+
+  if (error) {
+    // If credentials don't match your Supabase project settings
+    errorEl.textContent = "Invalid login credentials. Try again.";
+    errorEl.classList.remove('hidden');
+    console.error("Auth error:", error.message);
+  } else if (data.user) {
+    // Success! Hide login gate overlay and unlock your green admin screens
+    errorEl.classList.add('hidden');
     document.getElementById('admin-gate').classList.add('hidden');
     document.getElementById('admin-header').classList.remove('hidden');
     document.getElementById('admin-main').classList.remove('hidden');
     init();
-  } else {
-    document.getElementById('pw-error').classList.remove('hidden');
-    document.getElementById('admin-pw-input').select();
   }
 }
 

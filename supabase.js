@@ -4,15 +4,13 @@
 // ════════════════════════════════════════════════════════════
 
 // ┌─────────────────────────────────────────────────────────┐
-// │  FILL IN YOUR SUPABASE CREDENTIALS BELOW               │
+// │   PUBLIC SUPABASE CREDENTIALS                           │
 // └─────────────────────────────────────────────────────────┘
-window.SUPABASE_URL = window.SUPABASE_URL || "%SUPABASE_URL%";
-window.SUPABASE_ANON = window.SUPABASE_ANON || "%SUPABASE_ANON%";
-window.ADMIN_PASSWORD = window.ADMIN_PASSWORD || "%ADMIN_PASSWORD%";
+window.SUPABASE_URL = "https://szwnummygksldjufnhdt.supabase.co"; 
+window.SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN6d251bW15Z2tzbGRqdWZuaGR0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyMTgzNzgsImV4cCI6MjA5NTc5NDM3OH0.GkCiJPxWvlXxPN5BtcABRQnGCc3A1wfK2T2_EH74Py4";
 
-const SUPABASE_URL   = window.SUPABASE_URL || localStorage.getItem('SUPABASE_URL') || '';
-const SUPABASE_ANON  = window.SUPABASE_ANON || localStorage.getItem('SUPABASE_ANON') || '';
-const ADMIN_PASSWORD = window.ADMIN_PASSWORD || localStorage.getItem('ADMIN_PASSWORD') || '';
+// Initialize the database connection only ONCE here
+const db = supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON);
 
 // ── DB SCHEMA ─────────────────────────────────────────────
 // players:
@@ -36,9 +34,6 @@ const ADMIN_PASSWORD = window.ADMIN_PASSWORD || localStorage.getItem('ADMIN_PASS
 //   INSERT INTO settings (key,value) VALUES ('min_players','2'),('max_players','30');
 //
 // Enable Realtime on players, courts, and settings in Supabase!
-
-const { createClient } = supabase;
-const db = createClient(SUPABASE_URL, SUPABASE_ANON);
 
 // ── SHARED STATE ──────────────────────────────────────────
 let players  = [];
