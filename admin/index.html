@@ -26,15 +26,15 @@
   </script>
 
   <!-- Shared Supabase config, state & helpers -->
-  <script src="supabase.js"></script>
   <script>
-  // This safely bridges Vercel's environment variables to your frontend script
-  window.SUPABASE_URL = "" || "%SUPABASE_URL%";
-  window.SUPABASE_ANON = "" || "%SUPABASE_ANON%";
-  window.ADMIN_PASSWORD = "" || "%ADMIN_PASSWORD%";
-</script>
+    window.SUPABASE_URL = "%SUPABASE_URL%";
+    window.SUPABASE_ANON = "%SUPABASE_ANON%";
+    window.ADMIN_PASSWORD = "%ADMIN_PASSWORD%";
+  </script>
 
-<script src="supabase.js"></script>
+  <script src="../env-config.js"></script>
+
+  <script src="../supabase.js"></script>
 </head>
 
 <body class="text-green-100 min-h-screen">
