@@ -25,20 +25,14 @@
     };
   </script>
 
-  <!-- Shared Supabase config, state & helpers -->
-
-
   <script src="env-config.js" onerror="console.log('Running on production mode.')"></script>
-
   <script src="supabase.js"></script>
 </head>
 
 <body class="text-green-100 min-h-screen">
 
-<!-- TOAST -->
 <div id="toast-container" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 pointer-events-none"></div>
 
-<!-- HEADER — no admin link exposed here -->
 <header class="border-b border-green-900/50 bg-ink/80 backdrop-blur-sm sticky top-0 z-40">
   <div class="max-w-5xl mx-auto px-4 py-3 flex items-center gap-3">
     <div class="w-8 h-8 rounded-full bg-pickle-500 flex items-center justify-center text-ink font-bold">&#127955;</div>
@@ -46,25 +40,19 @@
     <span class="flex items-center gap-1.5 text-xs text-green-600 ml-1">
       <span class="live-dot w-1.5 h-1.5 rounded-full bg-pickle-500 inline-block"></span>LIVE
     </span>
-    <!-- Queue status pill: shows current count vs max -->
     <div id="queue-status-pill" class="ml-auto hidden">
       <span id="queue-status-text" class="text-xs px-3 py-1 rounded-full border font-medium"></span>
     </div>
   </div>
 </header>
 
-<!-- MAIN -->
 <main class="max-w-5xl mx-auto px-4 py-6 flex flex-col gap-6">
 
-  <!-- ── REGISTER FORM ─────────────────────────────
-       Shows a queue-full banner when max_players reached.
-       Shows a "not open yet" banner when below min_players. -->
   <section>
     <div class="bg-court border border-green-900/60 rounded-2xl p-5 max-w-md">
       <h2 class="display-font text-2xl text-pickle-400 mb-1">Join the Queue</h2>
       <p class="text-green-600 text-xs mb-4">Enter your name to get in line. You'll be matched when a court opens.</p>
 
-      <!-- Queue full notice (shown when at/above max) -->
       <div id="queue-full-notice" class="hidden mb-3 bg-yellow-950/60 border border-yellow-800/50 rounded-xl px-4 py-3">
         <p class="text-yellow-300 text-sm font-semibold">&#x26A0; Queue is full</p>
         <p id="queue-full-sub" class="text-yellow-600 text-xs mt-0.5"></p>
@@ -82,9 +70,6 @@
     </div>
   </section>
 
-  <!-- ── ON DECK BANNER ───────────────────────────
-       Shows next 4 players to be called.
-       Only visible when an open court exists + players waiting. -->
   <section id="up-next-section" class="hidden">
     <div class="up-next-banner shine-sweep relative overflow-hidden
                 bg-gradient-to-br from-pickle-900/70 via-green-950 to-ink
@@ -114,7 +99,6 @@
     </div>
   </section>
 
-  <!-- ── COURTS + WAITLIST ─────────────────── -->
   <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
     <section>
@@ -259,8 +243,31 @@ function renderWaitlist() {
     el.innerHTML = `<div class="text-green-700 text-sm py-8 text-center">Queue is empty — be first!</div>`;
     return;
   }
+
+  // Get the correct top 4 IDs using our smart centralized algorithm
   const topIds = getNextFourIds(waiting);
-  el.innerHTML = waiting.map((p, i) => {
+
+  const activeCourtCount = courts.length || 1;
+  const assignmentCycle = settings.assignment_cycle || 0;
+
+  let eligible = waiting.filter(p => {
+    const lastCycle = p.last_assignment_cycle || 0;
+    return (assignmentCycle - lastCycle >= activeCourtCount);
+  });
+
+  let usedFallback = eligible.length < 4;
+
+  const sortedWaiting = [...waiting].sort((a, b) => {
+    if (usedFallback) {
+      const cycleA = a.last_assignment_cycle || 0;
+      const cycleB = b.last_assignment_cycle || 0;
+      if (cycleA !== cycleB) return cycleA - cycleB;
+    }
+    if (a.games_played !== b.games_played) return a.games_played - b.games_played;
+    return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+  });
+
+  el.innerHTML = sortedWaiting.map((p, i) => {
     const isNext = topIds.includes(p.id);
     return `
     <div class="waitlist-row grid grid-cols-12 px-4 py-2.5 transition-colors items-center ${isNext ? 'bg-pickle-900/20' : ''}">
@@ -282,8 +289,11 @@ function renderWaitlist() {
 function renderUpNext() {
   const waiting   = players.filter(p => p.status === 'waiting');
   const section   = document.getElementById('up-next-section');
-  const openCourt = courts.find(c => !c.player_ids || c.player_ids.length < 4);
-  if (!waiting.length || !openCourt) { section.classList.add('hidden'); return; }
+  
+  if (!waiting.length) { 
+    section.classList.add('hidden'); 
+    return; 
+  }
 
   const top = getNextFourIds(waiting).map(id => waiting.find(p => p.id === id)).filter(Boolean);
   document.getElementById('up-next-players').innerHTML = top.map((p, i) => `
@@ -297,8 +307,16 @@ function renderUpNext() {
     </div>
   `).join('');
 
-  document.getElementById('up-next-court-name').textContent = openCourt.name;
-  document.getElementById('up-next-court').classList.remove('hidden');
+  const openCourt = courts.find(c => !c.player_ids || c.player_ids.length < 4);
+  const courtTextEl = document.getElementById('up-next-court');
+  
+  if (openCourt) {
+    document.getElementById('up-next-court-name').textContent = openCourt.name;
+    courtTextEl.classList.remove('hidden');
+  } else {
+    courtTextEl.classList.add('hidden');
+  }
+
   section.classList.remove('hidden');
 }
 
@@ -308,7 +326,6 @@ async function registerPlayer() {
   const name  = input.value.trim();
   if (!name) { toast('Enter a name first!', 'warn'); return; }
 
-  // Max players check
   if (players.length >= settings.max_players) {
     toast('Queue is full! Maximum of ' + settings.max_players + ' players reached.', 'warn');
     return;

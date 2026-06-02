@@ -441,26 +441,56 @@ function renderAdminCourts() {
 
 // ── ALL PLAYERS PANEL ─────────────────────────────
 function renderAdminPlayers() {
-  const all = [...players].sort((a, b) => {
-    if (a.status !== b.status) return a.status === 'waiting' ? -1 : 1;
-    if (a.games_played !== b.games_played) return a.games_played - b.games_played;
-    return new Date(a.created_at) - new Date(b.created_at);
+  const playingPlayers = players.filter(p => p.status === 'playing');
+  const waitingPlayers = players.filter(p => p.status === 'waiting');
+
+  const activeCourtCount = courts.length || 1;
+  const assignmentCycle = settings.assignment_cycle || 0;
+
+  let eligible = waitingPlayers.filter(p => {
+    const lastCycle = p.last_assignment_cycle || 0;
+    return (assignmentCycle - lastCycle >= activeCourtCount);
   });
+
+  let usedFallback = eligible.length < 4;
+
+  // Sort using the exact matching logic
+  waitingPlayers.sort((a, b) => {
+    if (usedFallback) {
+      const cycleA = a.last_assignment_cycle || 0;
+      const cycleB = b.last_assignment_cycle || 0;
+      if (cycleA !== cycleB) return cycleA - cycleB;
+    }
+    if (a.games_played !== b.games_played) return a.games_played - b.games_played;
+    return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+  });
+
+  playingPlayers.sort((a, b) => a.games_played - b.games_played);
+  const all = [...waitingPlayers, ...playingPlayers];
+
+  // Get next 4 absolute targets using the unified helper
+  const topIds = getNextFourIds(waitingPlayers);
+
   document.getElementById('admin-player-count').textContent = all.length;
   const el = document.getElementById('admin-player-body');
   if (!all.length) {
     el.innerHTML = `<div class="text-green-700 text-sm py-6 text-center">No players yet</div>`;
     return;
   }
+  
   el.innerHTML = all.map((p, i) => {
     const isPlaying = p.status === 'playing';
+    const isNext = !isPlaying && topIds.includes(p.id);
     return `
-    <div class="flex items-center justify-between px-4 py-2.5 hover:bg-green-950/30 transition-colors">
+    <div class="flex items-center justify-between px-4 py-2.5 transition-colors ${isPlaying ? 'bg-ink/20 opacity-70' : isNext ? 'bg-pickle-900/10' : 'hover:bg-green-950/30'}">
       <div class="flex items-center gap-2 min-w-0">
         <span class="text-green-700 text-xs font-mono w-5 shrink-0">${i+1}</span>
-        <span class="text-sm truncate ${isPlaying ? 'text-pickle-400 font-semibold' : 'text-green-200'}">${esc(p.name)}</span>
-        <span class="text-xs shrink-0 ${isPlaying ? 'text-pickle-600' : 'text-green-700'}">${p.games_played}g</span>
-        ${isPlaying ? `<span class="text-xs text-pickle-700 shrink-0">&#9679; playing</span>` : ''}
+        <span class="text-sm truncate ${isPlaying ? 'text-pickle-700 line-through' : isNext ? 'text-pickle-300 font-bold' : 'text-green-200'}">
+          ${esc(p.name)}
+          ${isNext ? `<span class="ml-1 text-[10px] bg-pickle-900/60 border border-pickle-700/40 text-pickle-400 px-1.5 py-0.5 rounded-full font-bold">Next</span>` : ''}
+        </span>
+        <span class="text-xs shrink-0 ${isPlaying ? 'text-pickle-800' : 'text-green-700'}">(${p.games_played}g)</span>
+        ${isPlaying ? `<span class="text-xs text-pickle-800 shrink-0">&#9679; court</span>` : ''}
       </div>
       <button onclick="removePlayer('${p.id}')"
         class="ml-2 text-xs text-red-500 hover:text-red-400 transition-colors shrink-0" title="Remove player">&#x2715;</button>

@@ -12,33 +12,10 @@ window.SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmF
 // Initialize the database connection only ONCE here
 const db = supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON);
 
-// ── DB SCHEMA ─────────────────────────────────────────────
-// players:
-//   id           uuid        pk default gen_random_uuid()
-//   name         text        not null
-//   games_played int         default 0
-//   status       text        default 'waiting'   -- 'waiting' | 'playing'
-//   created_at   timestamptz default now()
-//
-// courts:
-//   id           uuid        pk default gen_random_uuid()
-//   name         text        not null
-//   player_ids   uuid[]      default '{}'
-//   is_active    boolean     default true
-//   created_at   timestamptz default now()
-//
-// settings:                  ← used for min/max player limits
-//   key          text        pk
-//   value        text
-//
-//   INSERT INTO settings (key,value) VALUES ('min_players','2'),('max_players','30');
-//
-// Enable Realtime on players, courts, and settings in Supabase!
-
 // ── SHARED STATE ──────────────────────────────────────────
 let players  = [];
 let courts   = [];
-let settings = { min_players: 2, max_players: 30 }; // defaults; overridden from DB
+let settings = { min_players: 2, max_players: 30, assignment_cycle: 0 }; // defaults; overridden from DB
 
 // ── DATA FETCHERS ─────────────────────────────────────────
 async function fetchPlayers() {
@@ -60,6 +37,7 @@ async function fetchSettings() {
     data.forEach(row => {
       if (row.key === 'min_players') settings.min_players = parseInt(row.value) || 2;
       if (row.key === 'max_players') settings.max_players = parseInt(row.value) || 30;
+      if (row.key === 'assignment_cycle') settings.assignment_cycle = parseInt(row.value) || 0;
     });
   }
 }
@@ -68,92 +46,150 @@ async function fetchSettings() {
 function getPlayer(id) { return players.find(p => p.id === id); }
 
 // Returns next 4 player IDs in deterministic priority order:
-// 0-game players first (by join time), then fewest games (by join time)
 function getNextFourIds(waitingPool) {
-  const sorted = [...waitingPool].sort((a, b) => {
-    if (a.games_played !== b.games_played) return a.games_played - b.games_played;
-    return new Date(a.created_at) - new Date(b.created_at);
+  if (!waitingPool || waitingPool.length < 4) return [];
+  
+  const activeCourtCount = courts.length || 1;
+  const assignmentCycle = settings.assignment_cycle || 0;
+
+  // 1. Anti-back-to-back filter
+  let eligible = waitingPool.filter(p => {
+    const lastCycle = p.last_assignment_cycle || 0;
+    return (assignmentCycle - lastCycle >= activeCourtCount);
   });
-  return sorted.slice(0, 4).map(p => p.id);
+
+  // Fallback if there are not enough players who haven't played recently
+  let usedFallback = false;
+  if (eligible.length < 4) {
+    eligible = [...waitingPool];
+    usedFallback = true;
+  }
+
+  // 2. Deterministic Sort (Matches autoMatch sorting completely)
+  eligible.sort((a, b) => {
+    if (usedFallback) {
+      const cycleA = a.last_assignment_cycle || 0;
+      const cycleB = b.last_assignment_cycle || 0;
+      if (cycleA !== cycleB) return cycleA - cycleB; // Longest sitting player first
+    }
+
+    if (a.games_played !== b.games_played) {
+      return a.games_played - b.games_played;
+    }
+
+    const timeA = new Date(a.created_at).getTime();
+    const timeB = new Date(b.created_at).getTime();
+    return timeA - timeB; // Earliest registration time wins tiebreaker
+  });
+
+  return eligible.slice(0, 4).map(p => p.id);
 }
 
 // ── AUTO-MATCH ALGORITHM ──────────────────────────────────
-//
-//  TIER 1 — 0-game players ALWAYS first (pure random among them).
-//  TIER 2 — Exponential decay: weight = 0.2 ^ (games - minG)
-//           minG+0 = 100%, +1 = 20%, +2 = 4%, +3 = 0.8%
-//  TIER 3 — Tiebreak by earliest join time (up to +10% bonus).
-//
-//  silent=true  → auto-triggered (suppresses spinner, different toast)
-//  silent=false → manual "Force Now" button press
-//
-async function autoMatch(silent) {
-  if (silent === undefined) silent = false;
+async function autoMatch(silent = false) {
+  const { data: freshPlayers, error: pe } = await db.from('players').select('*');
+  const { data: freshCourts, error: ce } = await db.from('courts').select('*').eq('is_active', true);
+  
+  if (pe || ce || !freshPlayers || !freshCourts) return false;
 
-  const openCourt = courts.find(c => !c.player_ids || c.player_ids.length < 4);
+  const openCourt = freshCourts.find(c => !c.player_ids || c.player_ids.length < 4);
   if (!openCourt) {
-    if (!silent) toast('No open courts available!', 'warn');
+    if (!silent) toast('No open courts.', 'warn');
     return false;
   }
 
-  const waiting = players.filter(p => p.status === 'waiting');
-  if (waiting.length < 4) {
-    if (!silent) toast('Need at least 4 waiting players (have ' + waiting.length + ').', 'warn');
-    return false;
+  const activeCourtCount = freshCourts.length || 1;
+  let assignmentCycle = 0;
+
+  const { data: cycleRow } = await db
+    .from('settings')
+    .select('value')
+    .eq('key', 'assignment_cycle')
+    .single();
+
+  if (cycleRow) {
+    assignmentCycle = parseInt(cycleRow.value || 0);
   }
 
-  if (!silent) setLoading('auto-match-btn', true);
+  let waiting = freshPlayers.filter(p => p.status === 'waiting');
+  if (waiting.length < 4) return false;
 
-  function weightedPick(pool) {
-    const total = pool.reduce((s, p) => s + p.weight, 0);
-    let rng = Math.random() * total;
-    for (const p of pool) { rng -= p.weight; if (rng <= 0) return p; }
-    return pool[pool.length - 1];
+  // 1. Anti-back-to-back filter
+  let eligible = waiting.filter(p => {
+    const lastCycle = p.last_assignment_cycle || 0;
+    return (assignmentCycle - lastCycle >= activeCourtCount);
+  });
+
+  // Fallback if there are not enough players who haven't played recently
+  let usedFallback = false;
+  if (eligible.length < 4) {
+    eligible = waiting;
+    usedFallback = true;
   }
 
-  const picked = [];
-  let pool = [...waiting];
-
-  for (let i = 0; i < 4; i++) {
-    const fresh = pool.filter(p => p.games_played === 0);
-    let weighted;
-    if (fresh.length > 0) {
-      weighted = fresh.map(p => ({ ...p, weight: 1 }));
-    } else {
-      const minG     = Math.min(...pool.map(p => p.games_played));
-      const earliest = Math.min(...pool.map(p => new Date(p.created_at).getTime()));
-      weighted = pool.map(p => {
-        const gameWeight = Math.pow(0.2, p.games_played - minG);
-        const ageSecs    = (new Date(p.created_at).getTime() - earliest) / 1000;
-        const ageBonus   = 1 + Math.max(0, 1 - ageSecs / 3600) * 0.1;
-        return { ...p, weight: gameWeight * ageBonus };
-      });
+  // 2. Safe, stable sorting logic (No random values)
+  eligible.sort((a, b) => {
+    if (usedFallback) {
+      const cycleA = a.last_assignment_cycle || 0;
+      const cycleB = b.last_assignment_cycle || 0;
+      if (cycleA !== cycleB) return cycleA - cycleB;
     }
-    const chosen = weightedPick(weighted);
-    picked.push(chosen);
-    pool = pool.filter(p => p.id !== chosen.id);
-  }
 
-  await assignPlayersToCourt(openCourt.id, picked.map(p => p.id));
+    if (a.games_played !== b.games_played) {
+      return a.games_played - b.games_played;
+    }
 
-  const names = picked.map(p => p.name).join(', ');
-  const stEl  = document.getElementById('automatch-status');
-  if (stEl) stEl.textContent = 'Current Match: ' + names + ' \u2192 ' + openCourt.name;
+    const timeA = new Date(a.created_at).getTime();
+    const timeB = new Date(b.created_at).getTime();
+    return timeA - timeB;
+  });
 
-  if (!silent) {
-    setLoading('auto-match-btn', false);
-    toast('Matched! ' + names + ' \u2192 ' + openCourt.name, 'success');
-  } else {
-    toast('\u26A1 Auto-matched \u2192 ' + openCourt.name + ': ' + names, 'success');
-  }
+  const chosen = eligible.slice(0, 4);
+  assignmentCycle++;
+
+  // Update master settings memory cache
+  settings.assignment_cycle = assignmentCycle;
+
+  await db
+    .from('settings')
+    .upsert({
+      key: 'assignment_cycle',
+      value: String(assignmentCycle)
+    }, { onConflict: 'key' });
+
+  await assignPlayersToCourt(
+    openCourt.id,
+    chosen.map(p => p.id),
+    assignmentCycle
+  );
+
   return true;
 }
 
-async function assignPlayersToCourt(courtId, playerIds) {
-  const { error: ce } = await db.from('courts').update({ player_ids: playerIds }).eq('id', courtId);
-  if (ce) { toast('Error assigning to court.', 'error'); return false; }
-  const { error: pe } = await db.from('players').update({ status: 'playing' }).in('id', playerIds);
-  if (pe) { toast('Error updating player status.', 'error'); return false; }
+async function assignPlayersToCourt(courtId, playerIds, assignmentCycle) {
+  const { error: ce } = await db
+    .from('courts')
+    .update({ player_ids: playerIds })
+    .eq('id', courtId);
+
+  if (ce) {
+    toast('Court update failed.', 'error');
+    return false;
+  }
+
+  const { error: pe } = await db
+    .from('players')
+    .update({
+      status: 'playing',
+      last_assignment_cycle: assignmentCycle
+    })
+    .in('id', playerIds);
+
+  if (pe) {
+    toast('Player update failed.', 'error');
+    return false;
+  }
+
   return true;
 }
 
@@ -218,7 +254,6 @@ function injectSharedStyles() {
       50%      { box-shadow: 0 0 0 8px rgba(34,197,68,0); }
     }
     .up-next-banner { animation: glow-pulse 2.8s ease-in-out infinite; }
-    @keyframes pop-in { from{transform:scale(0.88);opacity:0} to{transform:scale(1);opacity:1} }
     .up-next-player { animation: pop-in 0.35s ease forwards; }
     @keyframes shine { 0%{transform:translateX(-120%)} 60%{transform:translateX(120%)} 100%{transform:translateX(120%)} }
     .shine-sweep::after {
