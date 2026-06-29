@@ -1,17 +1,4 @@
 {
   "cleanUrls": true,
-  "builds": [
-    {
-      "src": "index.html",
-      "use": "@vercel/static"
-    },
-    {
-      "src": "admin/index.html",
-      "use": "@vercel/static"
-    },
-    {
-      "src": "supabase.js",
-      "use": "@vercel/static"
-    }
-  ]
+  "trailingSlash": false
 }

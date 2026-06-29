@@ -249,7 +249,6 @@ async function createAccount() {
       password: pw,
       options: {
         data: { club_name: clubName },
-        emailRedirectTo: window.location.origin + '/admin/index.html',
       },
     });
 
@@ -259,6 +258,12 @@ async function createAccount() {
       console.error('Supabase signUp error:', error);
       showError(friendlyError(error.message, error.status));
       return;
+    }
+
+    // Supabase returns data.user = null when email confirmation is required
+    // but no error — treat it the same as success
+    if (!data?.user && !data?.session) {
+      // This is the "confirmation email sent" state — still a success
     }
 
     // Success — show confirmation panel
