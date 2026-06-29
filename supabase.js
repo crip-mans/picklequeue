@@ -17,23 +17,40 @@ let players          = [];
 let courts           = [];
 let settings         = { min_players: 2, max_players: 30, assignment_cycle: 0 };
 let assignmentCounter = 0;  // kept in sync with settings.assignment_cycle
+let currentClubId    = null; // set at login (admin) or session join (player)
+
+// ── CLUB CONTEXT ──────────────────────────────────────────
+// Admin path: resolves from Supabase auth user id.
+// Player path: resolves from the stored session (set in requireSession).
+async function initClubContext() {
+  const { data: { user } } = await db.auth.getUser();
+  if (user) { currentClubId = user.id; return; }
+  const stored = getStoredSession();
+  if (stored?.clubId) currentClubId = stored.clubId;
+}
 
 // ── DATA FETCHERS ─────────────────────────────────────────
 async function fetchPlayers() {
+  if (!currentClubId) return;
   const { data, error } = await db.from('players').select('*')
+    .eq('club_id', currentClubId)
     .order('games_played', { ascending: true })
     .order('created_at',   { ascending: true });
   if (!error) players = data || [];
 }
 
 async function fetchCourts() {
+  if (!currentClubId) return;
   const { data, error } = await db.from('courts').select('*')
+    .eq('club_id', currentClubId)
     .eq('is_active', true).order('created_at', { ascending: true });
   if (!error) courts = data || [];
 }
 
 async function fetchSettings() {
-  const { data, error } = await db.from('settings').select('*');
+  if (!currentClubId) return;
+  const { data, error } = await db.from('settings').select('*')
+    .eq('club_id', currentClubId);
   if (!error && data) {
     data.forEach(row => {
       if (row.key === 'min_players') settings.min_players = parseInt(row.value) || 2;
@@ -128,6 +145,7 @@ async function registerNewPlayer(name, skillLevel) {
     skill_level: skillLevel,
     status: 'waiting',
     games_played: median,
+    club_id: currentClubId,
   });
   return error;
 }
@@ -174,7 +192,7 @@ async function validateSessionCode(rawCode) {
   if (data.expires_at && new Date(data.expires_at) < new Date()) {
     return { valid: false, reason: 'This session code has expired.' };
   }
-  return { valid: true, sessionId: data.id, label: data.label };
+  return { valid: true, sessionId: data.id, label: data.label, clubId: data.club_id };
 }
 
 // ── SESSION STORAGE ────────────────────────────────────────
@@ -198,14 +216,15 @@ async function requireSession() {
   try {
     const result = await validateSessionCode(stored.code);
     if (!result.valid) { clearStoredSession(); window.location.href = 'index.html'; return null; }
+    currentClubId = result.clubId; // set club context for this player's session
     return stored;
   } catch { window.location.href = 'index.html'; return null; }
 }
 
 // ── AUTO-MATCH ALGORITHM ──────────────────────────────────
 async function autoMatch(silent = false) {
-  const { data: freshPlayers, error: pe } = await db.from('players').select('*');
-  const { data: freshCourts, error: ce } = await db.from('courts').select('*').eq('is_active', true);
+  const { data: freshPlayers, error: pe } = await db.from('players').select('*').eq('club_id', currentClubId);
+  const { data: freshCourts, error: ce } = await db.from('courts').select('*').eq('is_active', true).eq('club_id', currentClubId);
   
   if (pe || ce || !freshPlayers || !freshCourts) return false;
 
@@ -222,7 +241,8 @@ async function autoMatch(silent = false) {
     .from('settings')
     .select('value')
     .eq('key', 'assignment_cycle')
-    .single();
+    .eq('club_id', currentClubId)
+    .maybeSingle();
 
   if (cycleRow) {
     assignmentCycle = parseInt(cycleRow.value || 0);
@@ -272,8 +292,9 @@ async function autoMatch(silent = false) {
     .from('settings')
     .upsert({
       key: 'assignment_cycle',
-      value: String(assignmentCycle)
-    }, { onConflict: 'key' });
+      value: String(assignmentCycle),
+      club_id: currentClubId,
+    }, { onConflict: 'key,club_id' });
 
   await assignPlayersToCourt(
     openCourt.id,

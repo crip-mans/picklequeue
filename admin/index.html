@@ -387,10 +387,11 @@ async function checkAdminPw() {
   errEl.classList.remove('hidden');
 }
 
-function unlockAdmin() {
+async function unlockAdmin() {
   document.getElementById('admin-gate').classList.add('hidden');
   document.getElementById('admin-header').classList.remove('hidden');
   document.getElementById('admin-main').classList.remove('hidden');
+  await initClubContext(); // sets currentClubId = auth user id
   init();
 }
 
@@ -441,7 +442,9 @@ function renderAll() {
 // ══════════════════════════════════════════════════════════
 async function fetchSessions() {
   const { data, error } = await db
-    .from('sessions').select('*').order('created_at', { ascending: false });
+    .from('sessions').select('*')
+    .eq('club_id', currentClubId)
+    .order('created_at', { ascending: false });
   if (!error) sessions = data || [];
 }
 
@@ -538,7 +541,7 @@ async function createSessionCode() {
   }
   if (!code) { toast('Could not generate a unique code — try again.', 'error'); return; }
 
-  const row = { label, code, is_active: true };
+  const row = { label, code, is_active: true, club_id: currentClubId };
   if (expiry) row.expires_at = new Date(expiry).toISOString();
 
   const { error } = await db.from('sessions').insert(row);
@@ -637,7 +640,7 @@ function saveLimit(type, raw) {
     }
 
     const key = type === 'min' ? 'min_players' : 'max_players';
-    const { error } = await db.from('settings').upsert({ key, value: String(val) }, { onConflict:'key' });
+    const { error } = await db.from('settings').upsert({ key, value: String(val), club_id: currentClubId }, { onConflict:'key,club_id' });
     if (error) { toast('Error saving limit.', 'error'); return; }
     renderLimitsSummary();
     toast((type==='min'?'Min':'Max') + ' set to ' + val + '.', 'success');
@@ -799,7 +802,7 @@ function closeAddCourt() { document.getElementById('add-court-form').classList.a
 async function addCourt() {
   const name = document.getElementById('court-name-input').value.trim();
   if (!name) { toast('Enter a court name.', 'warn'); return; }
-  const { error } = await db.from('courts').insert({ name, player_ids: [], is_active: true });
+  const { error } = await db.from('courts').insert({ name, player_ids: [], is_active: true, club_id: currentClubId });
   if (error) { toast('Error adding court.', 'error'); return; }
   closeAddCourt(); toast(name + ' added!', 'success');
 }

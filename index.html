@@ -217,7 +217,7 @@ async function joinSession() {
     }
 
     // Success — store session and redirect
-    storeSession({ clubName, code: rawCode, sessionId: result.sessionId, sessionLabel: result.label });
+    storeSession({ clubName, code: rawCode, sessionId: result.sessionId, sessionLabel: result.label, clubId: result.clubId });
     window.location.href = 'index-user.html';
 
   } catch (e) {
