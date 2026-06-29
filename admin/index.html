@@ -351,6 +351,12 @@ function levelChip(level) {
   return `<span class="level-chip ${l.cls}">${l.icon} ${l.label}</span>`;
 }
 
+// Circle only — used in court cards to avoid overflow on small screens
+function levelDot(level) {
+  if (!level || !LEVELS[level]) return '';
+  return LEVELS[level].icon;
+}
+
 // ── PAGE-LOCAL STATE ──────────────────────────────────────
 let finishState = { courtId: null, selectedPairIndex: null };
 let assignState = { courtId: null, selected: new Set() };
@@ -682,19 +688,17 @@ function renderAdminCourts() {
           <div class="bg-ink/50 rounded-xl p-3">
             <div class="text-xs text-green-700 uppercase mb-2 font-medium">Team A</div>
             ${teamA.map(p => `
-              <div class="flex items-center gap-1 mb-1 flex-wrap">
-                <span class="text-sm text-green-200 font-medium">${esc(p.name)}</span>
-                ${levelChip(p.skill_level)}
-                <span class="text-green-700 text-xs">${p.games_played}g</span>
+              <div class="flex items-center gap-1.5 mb-1.5 min-w-0">
+                <span class="text-sm leading-none">${levelDot(p.skill_level)}</span>
+                <span class="text-sm text-green-200 font-medium truncate">${esc(p.name)}</span>
               </div>`).join('')}
           </div>
           <div class="bg-ink/50 rounded-xl p-3">
             <div class="text-xs text-green-700 uppercase mb-2 font-medium">Team B</div>
             ${teamB.map(p => `
-              <div class="flex items-center gap-1 mb-1 flex-wrap">
-                <span class="text-sm text-green-200 font-medium">${esc(p.name)}</span>
-                ${levelChip(p.skill_level)}
-                <span class="text-green-700 text-xs">${p.games_played}g</span>
+              <div class="flex items-center gap-1.5 mb-1.5 min-w-0">
+                <span class="text-sm leading-none">${levelDot(p.skill_level)}</span>
+                <span class="text-sm text-green-200 font-medium truncate">${esc(p.name)}</span>
               </div>`).join('')}
           </div>
         </div>
