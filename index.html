@@ -174,7 +174,7 @@
   try {
     const result = await validateSessionCode(stored.code);
     if (result.valid) {
-      window.location.href = 'index.html';
+      window.location.href = 'index-user.html';
     } else {
       clearStoredSession();
     }
@@ -218,7 +218,7 @@ async function joinSession() {
 
     // Success — store session and redirect
     storeSession({ clubName, code: rawCode, sessionId: result.sessionId, sessionLabel: result.label });
-    window.location.href = 'index.html';
+    window.location.href = 'index-user.html';
 
   } catch (e) {
     setLoading(false);
