@@ -76,18 +76,20 @@
      HEADER  (hidden until unlocked)
 ══════════════════════════════════════════════════════════ -->
 <header id="admin-header" class="hidden border-b border-green-900/50 bg-ink/80 backdrop-blur-sm sticky top-0 z-40">
-  <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-    <div class="flex items-center gap-3">
-      <div class="w-8 h-8 rounded-full bg-pickle-500 flex items-center justify-center text-ink font-bold">&#127955;</div>
-      <span class="display-font text-2xl tracking-wider text-pickle-400">PickleQueue</span>
-      <span class="text-xs bg-pickle-900/60 text-pickle-400 border border-pickle-700/40 px-2 py-0.5 rounded-full font-bold">ADMIN</span>
+  <div class="max-w-6xl mx-auto px-3 sm:px-4 py-2.5 sm:py-3 flex items-center justify-between gap-2">
+    <div class="flex items-center gap-2 sm:gap-3 min-w-0">
+      <div class="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-pickle-500 flex items-center justify-center text-ink font-bold shrink-0 text-sm">&#127955;</div>
+      <span class="display-font text-xl sm:text-2xl tracking-wider text-pickle-400 leading-none">PickleQueue</span>
+      <span class="text-xs bg-pickle-900/60 text-pickle-400 border border-pickle-700/40 px-1.5 py-0.5 rounded-full font-bold shrink-0">ADMIN</span>
     </div>
-    <div class="flex items-center gap-4">
-      <span class="text-xs text-green-700">
-        Assignment <span id="header-counter" class="text-green-500 font-mono font-bold">#0</span>
+    <div class="flex items-center gap-2 sm:gap-4 shrink-0">
+      <span class="text-xs text-green-600 font-mono font-bold">
+        <span class="hidden sm:inline text-green-700">Assignment </span>
+        <span id="header-counter" class="text-green-500">#0</span>
       </span>
-      <span class="flex items-center gap-1.5 text-xs text-green-600">
-        <span class="live-dot w-1.5 h-1.5 rounded-full bg-pickle-500 inline-block"></span>LIVE
+      <span class="flex items-center gap-1 text-xs text-green-600">
+        <span class="live-dot w-1.5 h-1.5 rounded-full bg-pickle-500 inline-block"></span>
+        <span class="hidden sm:inline">LIVE</span>
       </span>
     </div>
   </div>
@@ -96,8 +98,8 @@
 <!-- ══════════════════════════════════════════════════════════
      MAIN  (hidden until unlocked)
 ══════════════════════════════════════════════════════════ -->
-<main id="admin-main" class="hidden max-w-6xl mx-auto px-4 py-6">
-  <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
+<main id="admin-main" class="hidden max-w-6xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
+  <div class="grid grid-cols-1 xl:grid-cols-3 gap-4 sm:gap-6">
 
     <!-- ════════════════════════════════
          LEFT COLUMN: auto-match + courts
@@ -281,32 +283,33 @@
 <!-- ══════════════════════════════════════════════════════════
      FINISH MATCH MODAL
 ══════════════════════════════════════════════════════════ -->
-<div id="finish-modal" class="hidden fixed inset-0 z-50 bg-ink/80 backdrop-blur flex items-center justify-center p-4">
-  <div class="bg-court border border-green-900 rounded-2xl p-6 w-full max-w-md shadow-2xl">
+<div id="finish-modal" class="hidden fixed inset-0 z-50 bg-ink/80 backdrop-blur flex items-end sm:items-center justify-center p-0 sm:p-4">
+  <div class="bg-court border border-green-900 rounded-t-2xl sm:rounded-2xl p-5 sm:p-6 w-full max-w-md shadow-2xl max-h-[90vh] overflow-y-auto">
     <h2 class="display-font text-3xl text-pickle-400 mb-1">Finish Match</h2>
     <p id="finish-court-name" class="text-green-600 text-sm mb-4"></p>
     <p class="text-xs text-green-500 uppercase tracking-wider mb-2 font-medium">Select the winning pair</p>
     <div id="finish-pairs" class="flex flex-col gap-2 mb-5"></div>
-    <div class="flex gap-2">
-      <button onclick="finishMatch()"      class="flex-1 bg-pickle-600 hover:bg-pickle-500 text-white font-bold py-2.5 rounded-xl text-sm transition-colors">Confirm &amp; Clear Court</button>
-      <button onclick="closeFinishModal()" class="flex-1 bg-green-950 hover:bg-green-900 text-green-400 font-semibold py-2.5 rounded-xl text-sm transition-colors">Cancel</button>
+    <div class="flex flex-col sm:flex-row gap-2">
+      <button onclick="finishMatch()"      class="flex-1 bg-pickle-600 hover:bg-pickle-500 text-white font-bold py-3 rounded-xl text-sm transition-colors">Confirm &amp; Clear Court</button>
+      <button onclick="closeFinishModal()" class="flex-1 bg-green-950 hover:bg-green-900 text-green-400 font-semibold py-3 rounded-xl text-sm transition-colors">Cancel</button>
     </div>
+    <div class="h-safe-area-bottom sm:hidden"></div>
   </div>
 </div>
 
 <!-- ══════════════════════════════════════════════════════════
      MANUAL ASSIGN MODAL
 ══════════════════════════════════════════════════════════ -->
-<div id="assign-modal" class="hidden fixed inset-0 z-50 bg-ink/80 backdrop-blur flex items-center justify-center p-4">
-  <div class="bg-court border border-green-900 rounded-2xl p-6 w-full max-w-md shadow-2xl">
+<div id="assign-modal" class="hidden fixed inset-0 z-50 bg-ink/80 backdrop-blur flex items-end sm:items-center justify-center p-0 sm:p-4">
+  <div class="bg-court border border-green-900 rounded-t-2xl sm:rounded-2xl p-5 sm:p-6 w-full max-w-md shadow-2xl max-h-[90vh] flex flex-col">
     <h2 class="display-font text-3xl text-pickle-400 mb-1">Assign Players</h2>
     <p id="assign-court-label" class="text-green-600 text-sm mb-4"></p>
     <p class="text-xs text-green-500 uppercase tracking-wider mb-2 font-medium">Select exactly 4 players</p>
-    <div id="assign-player-list" class="flex flex-col gap-1 max-h-64 overflow-y-auto mb-4 border border-green-900/40 rounded-xl p-2"></div>
+    <div id="assign-player-list" class="flex flex-col gap-1 overflow-y-auto mb-4 border border-green-900/40 rounded-xl p-2 flex-1 min-h-0 max-h-[40vh]"></div>
     <p id="assign-error" class="text-red-400 text-xs mb-2 hidden">Please select exactly 4 players.</p>
-    <div class="flex gap-2">
-      <button onclick="confirmAssign()"   class="flex-1 bg-pickle-600 hover:bg-pickle-500 text-white font-bold py-2.5 rounded-xl text-sm transition-colors">Assign to Court</button>
-      <button onclick="closeAssignModal()" class="flex-1 bg-green-950 hover:bg-green-900 text-green-400 font-semibold py-2.5 rounded-xl text-sm transition-colors">Cancel</button>
+    <div class="flex flex-col sm:flex-row gap-2">
+      <button onclick="confirmAssign()"    class="flex-1 bg-pickle-600 hover:bg-pickle-500 text-white font-bold py-3 rounded-xl text-sm transition-colors">Assign to Court</button>
+      <button onclick="closeAssignModal()" class="flex-1 bg-green-950 hover:bg-green-900 text-green-400 font-semibold py-3 rounded-xl text-sm transition-colors">Cancel</button>
     </div>
   </div>
 </div>
@@ -664,32 +667,42 @@ function renderAdminCourts() {
 
     return `
     <div class="court-card bg-court border border-green-900/60 rounded-2xl p-4">
-      <div class="flex items-center justify-between mb-3">
-        <span class="display-font text-lg text-green-200">${esc(court.name)}</span>
-        <div class="flex gap-2">
+      <div class="flex items-center justify-between mb-3 gap-2">
+        <span class="display-font text-lg text-green-200 truncate">${esc(court.name)}</span>
+        <div class="flex gap-1.5 shrink-0">
           <button onclick="openAssignModal('${court.id}')"
-            class="text-xs bg-green-950 hover:bg-green-900 border border-green-800 text-green-400 px-2.5 py-1 rounded-lg transition-colors">Assign</button>
+            class="text-xs bg-green-950 hover:bg-green-900 border border-green-800 text-green-400 px-3 py-2 rounded-lg transition-colors min-w-[60px] text-center">Assign</button>
           <button onclick="removeCourt('${court.id}')"
-            class="text-xs bg-red-950 hover:bg-red-900 border border-red-900 text-red-400 px-2.5 py-1 rounded-lg transition-colors">Remove</button>
+            class="text-xs bg-red-950 hover:bg-red-900 border border-red-900 text-red-400 px-3 py-2 rounded-lg transition-colors min-w-[60px] text-center">Remove</button>
         </div>
       </div>
 
       ${active ? `
         <div class="grid grid-cols-2 gap-2 mb-3">
           <div class="bg-ink/50 rounded-xl p-3">
-            <div class="text-xs text-green-700 uppercase mb-1.5 font-medium">Team A</div>
-            ${teamA.map(p => `<div class="text-sm text-green-200 flex items-center gap-1.5">${esc(p.name)} ${levelChip(p.skill_level)} <span class="text-green-700 text-xs">(${p.games_played}g)</span></div>`).join('')}
+            <div class="text-xs text-green-700 uppercase mb-2 font-medium">Team A</div>
+            ${teamA.map(p => `
+              <div class="flex items-center gap-1 mb-1 flex-wrap">
+                <span class="text-sm text-green-200 font-medium">${esc(p.name)}</span>
+                ${levelChip(p.skill_level)}
+                <span class="text-green-700 text-xs">${p.games_played}g</span>
+              </div>`).join('')}
           </div>
           <div class="bg-ink/50 rounded-xl p-3">
-            <div class="text-xs text-green-700 uppercase mb-1.5 font-medium">Team B</div>
-            ${teamB.map(p => `<div class="text-sm text-green-200 flex items-center gap-1.5">${esc(p.name)} ${levelChip(p.skill_level)} <span class="text-green-700 text-xs">(${p.games_played}g)</span></div>`).join('')}
+            <div class="text-xs text-green-700 uppercase mb-2 font-medium">Team B</div>
+            ${teamB.map(p => `
+              <div class="flex items-center gap-1 mb-1 flex-wrap">
+                <span class="text-sm text-green-200 font-medium">${esc(p.name)}</span>
+                ${levelChip(p.skill_level)}
+                <span class="text-green-700 text-xs">${p.games_played}g</span>
+              </div>`).join('')}
           </div>
         </div>
         <button onclick="openFinishModal('${court.id}')"
-          class="w-full bg-pickle-700 hover:bg-pickle-600 text-white font-semibold py-2 rounded-xl text-sm transition-colors">
+          class="w-full bg-pickle-700 hover:bg-pickle-600 active:scale-[0.98] text-white font-semibold py-3 rounded-xl text-sm transition-all">
           &#127942; Finish Match
         </button>
-      ` : `<div class="text-green-700 text-sm text-center py-2">Open — no players assigned</div>`}
+      ` : `<div class="text-green-700 text-sm text-center py-3">Open — no players assigned</div>`}
     </div>`;
   }).join('');
 }
@@ -747,20 +760,24 @@ function renderAdminPlayers() {
                   : 'text-green-200';
 
     return `
-    <div class="flex items-center justify-between px-4 py-2.5 transition-colors ${rowBg}">
-      <div class="flex items-center gap-2 min-w-0">
-        <span class="text-green-700 text-xs font-mono w-5 shrink-0">${i+1}</span>
-        <span class="text-sm truncate ${nameCls}">
-          ${esc(p.name)}
-          ${isNext ? `<span class="ml-1 text-[10px] bg-pickle-900/60 border border-pickle-700/40 text-pickle-400 px-1.5 py-0.5 rounded-full font-bold">Next</span>` : ''}
-        </span>
-        <span class="text-xs shrink-0 ${isPlaying ? 'text-pickle-600' : 'text-green-700'}">${p.games_played}g</span>
-        ${levelChip(p.skill_level)}
-        ${isPlaying ? `<span class="text-xs text-pickle-700 shrink-0">&#9679; playing</span>` : ''}
-        ${restBadge}
+    <div class="flex items-center justify-between px-3 sm:px-4 py-3 transition-colors ${rowBg} gap-2">
+      <div class="flex items-center gap-2 min-w-0 flex-1">
+        <span class="text-green-700 text-xs font-mono w-5 text-center shrink-0">${i+1}</span>
+        <div class="min-w-0 flex-1">
+          <div class="flex items-center gap-1.5 flex-wrap">
+            <span class="text-sm truncate ${nameCls}">${esc(p.name)}</span>
+            ${isNext ? `<span class="text-[10px] bg-pickle-900/60 border border-pickle-700/40 text-pickle-400 px-1.5 py-0.5 rounded-full font-bold leading-none">Next</span>` : ''}
+            ${isPlaying ? `<span class="text-[10px] text-pickle-600 font-semibold">&#9679; playing</span>` : ''}
+            ${restBadge}
+          </div>
+          <div class="flex items-center gap-2 mt-0.5">
+            ${levelChip(p.skill_level)}
+            <span class="text-xs ${isPlaying ? 'text-pickle-600' : 'text-green-700'}">${p.games_played}g</span>
+          </div>
+        </div>
       </div>
       <button onclick="removePlayer('${p.id}')"
-        class="ml-2 text-xs text-red-500 hover:text-red-400 transition-colors shrink-0" title="Remove">&#x2715;</button>
+        class="shrink-0 text-red-600 hover:text-red-400 transition-colors p-2 rounded-lg hover:bg-red-950/30 text-base leading-none" title="Remove">&#x2715;</button>
     </div>`;
   }).join('');
 }
@@ -920,13 +937,17 @@ function renderAssignList() {
   el.innerHTML = all.map(p => {
     const r = isResting(p);
     return `
-    <label class="flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer hover:bg-green-950/40 transition-colors">
+    <label class="flex items-center gap-3 px-3 py-3 rounded-lg cursor-pointer hover:bg-green-950/40 transition-colors min-h-[48px]">
       <input type="checkbox" value="${p.id}" ${assignState.selected.has(p.id) ? 'checked' : ''}
-        onchange="toggleAssign('${p.id}', this.checked)" class="accent-pickle-500 w-4 h-4" />
-      <span class="text-sm flex-1 ${r ? 'text-yellow-500/80' : 'text-green-200'}">${esc(p.name)}</span>
-      ${levelChip(p.skill_level)}
-      <span class="text-xs text-green-700">${p.games_played}g</span>
-      ${r ? `<span class="resting-badge">&#x23F3;</span>` : ''}
+        onchange="toggleAssign('${p.id}', this.checked)" class="accent-pickle-500 w-5 h-5 shrink-0" />
+      <div class="flex-1 min-w-0">
+        <span class="text-sm ${r ? 'text-yellow-500/80' : 'text-green-200'} block truncate">${esc(p.name)}</span>
+        <div class="flex items-center gap-2 mt-0.5">
+          ${levelChip(p.skill_level)}
+          <span class="text-xs text-green-700">${p.games_played}g</span>
+          ${r ? `<span class="text-yellow-600 text-xs">&#x23F3; resting</span>` : ''}
+        </div>
+      </div>
     </label>`;
   }).join('');
 }
