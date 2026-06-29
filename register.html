@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PickleQueue — Create Club Account</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { display:['Bebas Neue','cursive'], body:['DM Sans','sans-serif'] },
+          colors: {
+            pickle:{ 50:'#f0fdf0',100:'#dcfce0',200:'#bbf7c4',300:'#86ef9a',400:'#4ade68',
+                     500:'#22c544',600:'#16a336',700:'#15802d',800:'#166528',900:'#145323' },
+            court:'#1a2e1a', ink:'#0d1a0d',
+          },
+        },
+      },
+    };
+  </script>
+  <script src="supabase.js"></script>
+  <style>
+    * { font-family: 'DM Sans', sans-serif; }
+    .display-font { font-family: 'Bebas Neue', cursive; }
+
+    body {
+      background-color: #0d1a0d;
+      background-image:
+        radial-gradient(ellipse at 20% 10%, rgba(34,197,68,0.15) 0%, transparent 55%),
+        radial-gradient(ellipse at 80% 90%, rgba(34,197,68,0.10) 0%, transparent 55%);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem;
+    }
+
+    .court-bg {
+      background-image:
+        linear-gradient(rgba(34,197,68,0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(34,197,68,0.05) 1px, transparent 1px);
+      background-size: 28px 28px;
+    }
+
+    .input-glow:focus {
+      outline: none;
+      box-shadow: 0 0 0 2px rgba(34,197,68,0.45);
+    }
+
+    @keyframes float-ball {
+      0%,100% { transform: translateY(0px) rotate(-3deg); }
+      50%      { transform: translateY(-8px) rotate(3deg); }
+    }
+    .ball-float { animation: float-ball 3s ease-in-out infinite; }
+
+    @keyframes slide-up {
+      from { transform: translateY(16px); opacity: 0; }
+      to   { transform: translateY(0);    opacity: 1; }
+    }
+    .slide-up { animation: slide-up 0.5s ease forwards; }
+
+    .spinner {
+      border:2px solid rgba(34,197,68,0.2);
+      border-top-color:#22c544;
+      border-radius:50%;
+      width:18px; height:18px;
+      animation:spin .6s linear infinite;
+      display:inline-block; vertical-align:middle;
+    }
+    @keyframes spin { to { transform:rotate(360deg) } }
+
+    .dot-divider::before, .dot-divider::after {
+      content:''; display:inline-block; width:24px; height:1px;
+      background: rgba(34,197,68,0.25); vertical-align:middle; margin:0 8px;
+    }
+
+    /* Password strength bar */
+    #strength-bar { transition: width 0.3s ease, background-color 0.3s ease; }
+  </style>
+</head>
+
+<body class="text-green-100">
+
+<div id="toast-container" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+<!-- Decorative blobs -->
+<div class="pointer-events-none fixed inset-0 overflow-hidden">
+  <div class="absolute -top-32 -left-32 w-96 h-96 rounded-full bg-pickle-900/20 blur-3xl"></div>
+  <div class="absolute -bottom-32 -right-32 w-96 h-96 rounded-full bg-pickle-900/15 blur-3xl"></div>
+</div>
+
+<div class="relative w-full max-w-sm slide-up">
+
+  <!-- Logo -->
+  <div class="text-center mb-8">
+    <div class="ball-float inline-block text-5xl mb-3 select-none">🏓</div>
+    <h1 class="display-font text-5xl tracking-widest text-pickle-400 leading-none">PickleQueue</h1>
+    <p class="text-green-600 text-sm mt-1.5">Court queue management for pickleball clubs</p>
+  </div>
+
+  <!-- Card -->
+  <div class="court-bg bg-court border border-green-900/70 rounded-2xl p-6 shadow-2xl shadow-black/40">
+
+    <h2 class="display-font text-2xl text-green-200 mb-0.5">Create Club Account</h2>
+    <p class="text-green-600 text-xs mb-5">Register your club to manage courts, sessions, and queues.</p>
+
+    <!-- Success state (hidden by default) -->
+    <div id="success-panel" class="hidden text-center py-4">
+      <div class="text-4xl mb-3">&#x2705;</div>
+      <p class="text-pickle-400 font-bold text-lg mb-1">Account created!</p>
+      <p class="text-green-500 text-sm mb-1">Check your email to confirm your account.</p>
+      <p class="text-green-700 text-xs mb-5">After confirming, sign in to your admin dashboard.</p>
+      <a href="admin/index.html"
+        class="block w-full text-center bg-pickle-600 hover:bg-pickle-500 text-white font-bold py-3 rounded-xl text-sm transition-colors">
+        Go to Admin Login →
+      </a>
+    </div>
+
+    <!-- Registration form -->
+    <div id="register-form">
+
+      <!-- Club name -->
+      <div class="mb-3">
+        <label class="block text-xs text-green-600 uppercase tracking-wider font-semibold mb-1.5">Club Name</label>
+        <input id="club-name" type="text" placeholder="e.g. Sunset Pickle Club" maxlength="60"
+          autocomplete="organization"
+          class="input-glow w-full bg-ink border border-green-900 rounded-xl px-4 py-3 text-green-100 text-sm placeholder-green-800 transition-all"
+          onkeydown="if(event.key==='Enter') document.getElementById('email').focus()" />
+      </div>
+
+      <!-- Email -->
+      <div class="mb-3">
+        <label class="block text-xs text-green-600 uppercase tracking-wider font-semibold mb-1.5">Email Address</label>
+        <input id="email" type="email" placeholder="admin@yourclub.com" maxlength="100"
+          autocomplete="email"
+          class="input-glow w-full bg-ink border border-green-900 rounded-xl px-4 py-3 text-green-100 text-sm placeholder-green-800 transition-all"
+          onkeydown="if(event.key==='Enter') document.getElementById('password').focus()" />
+      </div>
+
+      <!-- Password -->
+      <div class="mb-2">
+        <label class="block text-xs text-green-600 uppercase tracking-wider font-semibold mb-1.5">Password</label>
+        <input id="password" type="password" placeholder="At least 8 characters" maxlength="64"
+          autocomplete="new-password"
+          class="input-glow w-full bg-ink border border-green-900 rounded-xl px-4 py-3 text-green-100 text-sm placeholder-green-800 transition-all"
+          oninput="updateStrength()"
+          onkeydown="if(event.key==='Enter') document.getElementById('confirm-password').focus()" />
+        <!-- Strength bar -->
+        <div class="mt-1.5 h-1 bg-green-950 rounded-full overflow-hidden">
+          <div id="strength-bar" class="h-full rounded-full w-0 bg-red-500"></div>
+        </div>
+        <p id="strength-label" class="text-green-800 text-xs mt-0.5"></p>
+      </div>
+
+      <!-- Confirm password -->
+      <div class="mb-5">
+        <label class="block text-xs text-green-600 uppercase tracking-wider font-semibold mb-1.5">Confirm Password</label>
+        <input id="confirm-password" type="password" placeholder="Repeat your password" maxlength="64"
+          autocomplete="new-password"
+          class="input-glow w-full bg-ink border border-green-900 rounded-xl px-4 py-3 text-green-100 text-sm placeholder-green-800 transition-all"
+          onkeydown="if(event.key==='Enter') createAccount()" />
+      </div>
+
+      <!-- Error message -->
+      <div id="reg-error" class="hidden mb-4 bg-red-950/60 border border-red-900/50 rounded-xl px-4 py-3">
+        <p id="reg-error-text" class="text-red-400 text-sm font-medium"></p>
+      </div>
+
+      <!-- Submit -->
+      <button id="register-btn" onclick="createAccount()"
+        class="w-full bg-pickle-600 hover:bg-pickle-500 active:scale-[0.98] text-white font-bold py-3.5 rounded-xl text-sm transition-all">
+        Create Account →
+      </button>
+    </div><!-- /register-form -->
+
+    <!-- Divider -->
+    <div class="my-4 text-center text-xs text-green-800 dot-divider">already have an account?</div>
+
+    <!-- Login link -->
+    <a href="admin/index.html"
+      class="block w-full text-center bg-green-950/60 hover:bg-green-950 border border-green-900/50 text-green-500 hover:text-green-400 font-medium py-2.5 rounded-xl text-xs transition-all">
+      Admin Login ↗
+    </a>
+  </div>
+
+  <!-- Footer -->
+  <p class="text-green-900 text-xs text-center mt-5">
+    PickleQueue &middot; Fair queue management for everyone
+  </p>
+</div>
+
+<script>
+// ── PASSWORD STRENGTH ────────────────────────────────────
+function updateStrength() {
+  const pw  = document.getElementById('password').value;
+  const bar = document.getElementById('strength-bar');
+  const lbl = document.getElementById('strength-label');
+
+  let score = 0;
+  if (pw.length >= 8)                        score++;
+  if (pw.length >= 12)                       score++;
+  if (/[A-Z]/.test(pw))                      score++;
+  if (/[0-9]/.test(pw))                      score++;
+  if (/[^A-Za-z0-9]/.test(pw))              score++;
+
+  const levels = [
+    { pct:'0%',   color:'bg-red-500',    text:'' },
+    { pct:'25%',  color:'bg-red-500',    text:'Weak' },
+    { pct:'50%',  color:'bg-yellow-500', text:'Fair' },
+    { pct:'75%',  color:'bg-yellow-400', text:'Good' },
+    { pct:'100%', color:'bg-pickle-500', text:'Strong' },
+  ];
+  const lvl = levels[Math.min(score, 4)];
+
+  bar.style.width    = lvl.pct;
+  bar.className      = 'h-full rounded-full ' + lvl.color;
+  lbl.textContent    = lvl.text;
+  lbl.className      = 'text-xs mt-0.5 ' +
+    (score >= 4 ? 'text-pickle-500' : score >= 2 ? 'text-yellow-500' : 'text-red-500');
+}
+
+// ── FORM SUBMIT ──────────────────────────────────────────
+async function createAccount() {
+  const clubName = document.getElementById('club-name').value.trim();
+  const email    = document.getElementById('email').value.trim();
+  const pw       = document.getElementById('password').value;
+  const pw2      = document.getElementById('confirm-password').value;
+
+  clearError();
+
+  if (!clubName) { showError('Please enter your club name.'); document.getElementById('club-name').focus(); return; }
+  if (!email)    { showError('Please enter your email address.'); document.getElementById('email').focus(); return; }
+  if (!isValidEmail(email)) { showError('Please enter a valid email address.'); document.getElementById('email').focus(); return; }
+  if (!pw)       { showError('Please enter a password.'); document.getElementById('password').focus(); return; }
+  if (pw.length < 8) { showError('Password must be at least 8 characters.'); document.getElementById('password').focus(); return; }
+  if (pw !== pw2)    { showError('Passwords do not match.'); document.getElementById('confirm-password').focus(); return; }
+
+  setBtnLoading(true);
+
+  try {
+    const { data, error } = await db.auth.signUp({
+      email,
+      password: pw,
+      options: {
+        data: { club_name: clubName },
+      },
+    });
+
+    setBtnLoading(false);
+
+    if (error) {
+      showError(friendlyError(error.message));
+      return;
+    }
+
+    // Success — show confirmation panel
+    document.getElementById('register-form').classList.add('hidden');
+    document.getElementById('success-panel').classList.remove('hidden');
+
+  } catch (e) {
+    setBtnLoading(false);
+    showError('Connection error. Check your internet and try again.');
+    console.error(e);
+  }
+}
+
+// ── HELPERS ──────────────────────────────────────────────
+function isValidEmail(v) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+}
+
+function friendlyError(msg) {
+  if (!msg) return 'Something went wrong — please try again.';
+  if (/already registered|already exists/i.test(msg))
+    return 'An account with this email already exists. Try logging in instead.';
+  if (/invalid email/i.test(msg))
+    return 'Please enter a valid email address.';
+  if (/password/i.test(msg))
+    return 'Password is too weak or invalid. Try a longer password.';
+  return msg;
+}
+
+function showError(msg) {
+  const el   = document.getElementById('reg-error');
+  const text = document.getElementById('reg-error-text');
+  text.textContent = msg;
+  el.classList.remove('hidden');
+}
+
+function clearError() {
+  document.getElementById('reg-error').classList.add('hidden');
+}
+
+function setBtnLoading(on) {
+  const btn = document.getElementById('register-btn');
+  btn.disabled  = on;
+  btn.innerHTML = on
+    ? '<span class="spinner"></span> Creating account...'
+    : 'Create Account →';
+}
+</script>
+</body>
+</html>

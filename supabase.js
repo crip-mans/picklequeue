@@ -45,10 +45,34 @@ async function fetchSettings() {
 // ── SHARED HELPERS ────────────────────────────────────────
 function getPlayer(id) { return players.find(p => p.id === id); }
 
+// Skill level order — used for adjacent-level fallback matching
+const LEVEL_ORDER = ['novice', 'beginner', 'intermediate', 'advanced'];
+
+// Picks 4 players from a pre-sorted pool, preferring same-level matches.
+// Falls back to adjacent levels (e.g. beginner+intermediate), then any mix.
+function selectFourByLevel(sortedPool) {
+  // 1. Strict same-level: pick first level that has 4+ players
+  for (const level of LEVEL_ORDER) {
+    const group = sortedPool.filter(p => p.skill_level === level);
+    if (group.length >= 4) return group.slice(0, 4);
+  }
+
+  // 2. Adjacent levels: novice+beginner, beginner+intermediate, intermediate+advanced
+  for (let i = 0; i < LEVEL_ORDER.length - 1; i++) {
+    const group = sortedPool.filter(p =>
+      p.skill_level === LEVEL_ORDER[i] || p.skill_level === LEVEL_ORDER[i + 1]
+    );
+    if (group.length >= 4) return group.slice(0, 4);
+  }
+
+  // 3. Full fallback — any mix (avoids everyone waiting forever)
+  return sortedPool.slice(0, 4);
+}
+
 // Returns next 4 player IDs in deterministic priority order:
 function getNextFourIds(waitingPool) {
   if (!waitingPool || waitingPool.length < 4) return [];
-  
+
   const activeCourtCount = courts.length || 1;
   const assignmentCycle = settings.assignment_cycle || 0;
 
@@ -82,7 +106,7 @@ function getNextFourIds(waitingPool) {
     return timeA - timeB; // Earliest registration time wins tiebreaker
   });
 
-  return eligible.slice(0, 4).map(p => p.id);
+  return selectFourByLevel(eligible).map(p => p.id);
 }
 
 // ── AUTO-MATCH ALGORITHM ──────────────────────────────────
@@ -144,7 +168,7 @@ async function autoMatch(silent = false) {
     return timeA - timeB;
   });
 
-  const chosen = eligible.slice(0, 4);
+  const chosen = selectFourByLevel(eligible);
   assignmentCycle++;
 
   // Update master settings memory cache
