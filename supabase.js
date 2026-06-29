@@ -13,9 +13,10 @@ window.SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmF
 const db = supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON);
 
 // ── SHARED STATE ──────────────────────────────────────────
-let players  = [];
-let courts   = [];
-let settings = { min_players: 2, max_players: 30, assignment_cycle: 0 }; // defaults; overridden from DB
+let players          = [];
+let courts           = [];
+let settings         = { min_players: 2, max_players: 30, assignment_cycle: 0 };
+let assignmentCounter = 0;  // kept in sync with settings.assignment_cycle
 
 // ── DATA FETCHERS ─────────────────────────────────────────
 async function fetchPlayers() {
@@ -37,7 +38,10 @@ async function fetchSettings() {
     data.forEach(row => {
       if (row.key === 'min_players') settings.min_players = parseInt(row.value) || 2;
       if (row.key === 'max_players') settings.max_players = parseInt(row.value) || 30;
-      if (row.key === 'assignment_cycle') settings.assignment_cycle = parseInt(row.value) || 0;
+      if (row.key === 'assignment_cycle') {
+        settings.assignment_cycle = parseInt(row.value) || 0;
+        assignmentCounter = settings.assignment_cycle;
+      }
     });
   }
 }
@@ -109,6 +113,95 @@ function getNextFourIds(waitingPool) {
   return selectFourByLevel(eligible).map(p => p.id);
 }
 
+// ── PLAYER REGISTRATION ───────────────────────────────────
+function medianGamesPlayed() {
+  if (!players.length) return 0;
+  const sorted = [...players].map(p => p.games_played || 0).sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 !== 0 ? sorted[mid] : Math.floor((sorted[mid - 1] + sorted[mid]) / 2);
+}
+
+async function registerNewPlayer(name, skillLevel) {
+  const median = medianGamesPlayed();
+  const { error } = await db.from('players').insert({
+    name,
+    skill_level: skillLevel,
+    status: 'waiting',
+    games_played: median,
+  });
+  return error;
+}
+
+// ── REST WINDOW ────────────────────────────────────────────
+function restWindowSize() {
+  return courts.length || 1;
+}
+
+function isResting(player) {
+  if (player.finished_at_assignment == null) return false;
+  return (assignmentCounter - player.finished_at_assignment) < restWindowSize();
+}
+
+async function finishPlayers(playerIds) {
+  const cycle = assignmentCounter;
+  const { data: ps } = await db.from('players').select('id, games_played').in('id', playerIds);
+  if (!ps) return;
+  for (const p of ps) {
+    await db.from('players').update({
+      status: 'waiting',
+      games_played: (p.games_played || 0) + 1,
+      finished_at_assignment: cycle,
+    }).eq('id', p.id);
+  }
+}
+
+// ── SESSION CODE ───────────────────────────────────────────
+function generateSessionCode() {
+  const chars  = 'ABCDEFGHJKLMNPQRSTUVWXYZ'; // no O or I
+  const digits = '23456789';                  // no 0 or 1
+  let code = '';
+  for (let i = 0; i < 3; i++) code += chars[Math.floor(Math.random() * chars.length)];
+  code += '-';
+  for (let i = 0; i < 4; i++) code += digits[Math.floor(Math.random() * digits.length)];
+  return code;
+}
+
+async function validateSessionCode(rawCode) {
+  const code = rawCode.trim().toUpperCase().replace(/\s/g, '');
+  const { data, error } = await db.from('sessions')
+    .select('*').eq('code', code).eq('is_active', true).maybeSingle();
+  if (error || !data) return { valid: false, reason: 'Invalid or inactive session code.' };
+  if (data.expires_at && new Date(data.expires_at) < new Date()) {
+    return { valid: false, reason: 'This session code has expired.' };
+  }
+  return { valid: true, sessionId: data.id, label: data.label };
+}
+
+// ── SESSION STORAGE ────────────────────────────────────────
+const SESSION_KEY = 'picklequeue_session';
+
+function storeSession(data) {
+  localStorage.setItem(SESSION_KEY, JSON.stringify(data));
+}
+
+function getStoredSession() {
+  try { return JSON.parse(localStorage.getItem(SESSION_KEY)); } catch { return null; }
+}
+
+function clearStoredSession() {
+  localStorage.removeItem(SESSION_KEY);
+}
+
+async function requireSession() {
+  const stored = getStoredSession();
+  if (!stored?.code) { window.location.href = 'index.html'; return null; }
+  try {
+    const result = await validateSessionCode(stored.code);
+    if (!result.valid) { clearStoredSession(); window.location.href = 'index.html'; return null; }
+    return stored;
+  } catch { window.location.href = 'index.html'; return null; }
+}
+
 // ── AUTO-MATCH ALGORITHM ──────────────────────────────────
 async function autoMatch(silent = false) {
   const { data: freshPlayers, error: pe } = await db.from('players').select('*');
@@ -171,8 +264,9 @@ async function autoMatch(silent = false) {
   const chosen = selectFourByLevel(eligible);
   assignmentCycle++;
 
-  // Update master settings memory cache
+  // Keep all counters in sync
   settings.assignment_cycle = assignmentCycle;
+  assignmentCounter = assignmentCycle;
 
   await db
     .from('settings')
