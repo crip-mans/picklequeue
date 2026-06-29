@@ -249,13 +249,15 @@ async function createAccount() {
       password: pw,
       options: {
         data: { club_name: clubName },
+        emailRedirectTo: window.location.origin + '/admin/index.html',
       },
     });
 
     setBtnLoading(false);
 
     if (error) {
-      showError(friendlyError(error.message));
+      console.error('Supabase signUp error:', error);
+      showError(friendlyError(error.message, error.status));
       return;
     }
 
@@ -275,14 +277,18 @@ function isValidEmail(v) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
 }
 
-function friendlyError(msg) {
+function friendlyError(msg, status) {
   if (!msg) return 'Something went wrong — please try again.';
-  if (/already registered|already exists/i.test(msg))
+  if (status === 404 || /not found|signup.*disabled|signups.*not allowed/i.test(msg))
+    return 'Signups are disabled on this project. Go to your Supabase dashboard → Authentication → Providers → Email → enable "Enable email signup".';
+  if (/already registered|already exists|user already/i.test(msg))
     return 'An account with this email already exists. Try logging in instead.';
   if (/invalid email/i.test(msg))
     return 'Please enter a valid email address.';
   if (/password/i.test(msg))
     return 'Password is too weak or invalid. Try a longer password.';
+  if (/rate.?limit/i.test(msg))
+    return 'Too many attempts — wait a minute and try again.';
   return msg;
 }
 
