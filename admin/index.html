@@ -761,9 +761,10 @@ function renderAdminPlayers() {
 
     // Resting: show how many assignments remain
     let restBadge = '';
-    if (resting && p.finished_at_assignment != null) {
-      const left = Math.max(0, (p.finished_at_assignment + win) - assignmentCounter);
-      restBadge = `<span class="resting-badge shrink-0">&#x23F3; ${left} left</span>`;
+    if (resting) {
+      const ref  = p.last_assignment_cycle || p.finished_at_assignment || 0;
+      const left = Math.max(0, (ref + win) - assignmentCounter);
+      restBadge = `<span class="text-[10px] bg-yellow-950 border border-yellow-800/60 text-yellow-500 px-1.5 py-0.5 rounded-full font-bold leading-none shrink-0">&#x23F3; ${left} left</span>`;
     }
 
     const rowBg  = isPlaying ? 'bg-ink/20'

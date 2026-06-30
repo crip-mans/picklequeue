@@ -162,8 +162,11 @@ function restWindowSize() {
 }
 
 function isResting(player) {
-  if (player.finished_at_assignment == null) return false;
-  return (assignmentCounter - player.finished_at_assignment) < restWindowSize();
+  if (!player.games_played) return false; // never played — never resting
+  // last_assignment_cycle is set directly by autoMatch's local assignmentCycle variable
+  // (not the in-memory assignmentCounter which can be stale). More reliable.
+  const ref = player.last_assignment_cycle || player.finished_at_assignment || 0;
+  return (assignmentCounter - ref) < restWindowSize();
 }
 
 async function finishPlayers(playerIds, winnerIds = []) {

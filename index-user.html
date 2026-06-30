@@ -592,20 +592,21 @@ function renderWaitlist() {
     const resting = isResting(p);
     return `
     <div class="waitlist-row flex items-center px-3 sm:px-4 py-3 gap-2 sm:gap-3 transition-colors
-      ${isNext ? 'bg-pickle-900/20' : ''}">
+      ${isNext   ? 'bg-pickle-900/20'    : ''}
+      ${resting && !isNext ? 'bg-yellow-950/20' : ''}">
 
       <!-- Position -->
       <span class="text-green-700 text-xs font-mono w-5 text-center shrink-0">${i+1}</span>
 
-      <!-- Name + level stacked -->
+      <!-- Name + badges + level stacked -->
       <div class="flex-1 min-w-0">
         <div class="flex items-center gap-1.5 flex-wrap">
           <span class="text-sm font-medium truncate
-            ${isNext ? 'text-pickle-300' : resting ? 'text-yellow-600/70' : 'text-green-200'}">
+            ${isNext ? 'text-pickle-300' : resting ? 'text-yellow-500' : 'text-green-200'}">
             ${esc(p.name)}
           </span>
           ${isNext ? `<span class="text-[10px] bg-pickle-900/60 border border-pickle-700/40 text-pickle-400 px-1.5 py-0.5 rounded-full font-bold leading-none">Next</span>` : ''}
-          ${resting && !isNext ? `<span class="text-yellow-600 text-xs">&#x23F3;</span>` : ''}
+          ${resting && !isNext ? `<span class="text-[10px] bg-yellow-950 border border-yellow-800/60 text-yellow-500 px-1.5 py-0.5 rounded-full font-bold leading-none">&#x23F3; Resting</span>` : ''}
         </div>
         <div class="flex items-center gap-2 mt-0.5">
           ${levelChip(p.skill_level)}
