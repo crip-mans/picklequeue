@@ -893,6 +893,11 @@ async function finishMatch() {
   await finishPlayers(pids, winnerIds);
   await db.from('courts').update({ player_ids: [] }).eq('id', court.id);
 
+  // Explicitly refresh — don't wait for realtime latency so status
+  // flips from 'playing' → 'waiting' immediately on both admin and player views.
+  await Promise.all([fetchPlayers(), fetchCourts()]);
+  renderAll();
+
   closeFinishModal();
   toast('Match done! Players resting for ' + restWindowSize() + ' assignment(s). &#127955;', 'success');
 
@@ -975,7 +980,7 @@ async function confirmAssign() {
   if (prevPids.length) {
     await db.from('players').update({ status: 'waiting' }).in('id', prevPids);
   }
-  await assignPlayersToCourt(assignState.courtId, [...assignState.selected]);
+  await assignPlayersToCourt(assignState.courtId, [...assignState.selected], assignmentCounter);
   closeAssignModal();
   toast('Players assigned!', 'success');
 }

@@ -176,27 +176,17 @@ async function finishPlayers(playerIds, winnerIds = []) {
   if (!ps || !ps.length) return;
 
   for (const p of ps) {
-    // parseInt guards against Supabase returning numeric columns as strings,
-    // which would cause "0" + 1 = "01" (string concat) → Postgres 400 error.
     const gamesPlayed = parseInt(p.games_played, 10) || 0;
-
-    // 1. Status + games — core columns, always exist
-    const { error: e1 } = await db.from('players').update({
+    const updateData = {
       status: 'waiting',
       games_played: gamesPlayed + 1,
-    }).eq('id', p.id);
-    if (e1) toast('Error updating player ' + p.name + ': ' + e1.message, 'error');
-
-    // 2. Resting tracker — only if column is present in DB response
-    if ('finished_at_assignment' in p) {
-      await db.from('players').update({ finished_at_assignment: cycle }).eq('id', p.id);
-    }
-
-    // 3. Wins — only for winners, only if column is present in DB response
+    };
+    if ('finished_at_assignment' in p) updateData.finished_at_assignment = cycle;
     if (winnerIds.includes(p.id) && 'wins' in p) {
-      const currentWins = parseInt(p.wins, 10) || 0;
-      await db.from('players').update({ wins: currentWins + 1 }).eq('id', p.id);
+      updateData.wins = (parseInt(p.wins, 10) || 0) + 1;
     }
+    const { error } = await db.from('players').update(updateData).eq('id', p.id);
+    if (error) toast('Error updating player ' + p.name + ': ' + error.message, 'error');
   }
 }
 
