@@ -171,21 +171,31 @@ function isResting(player) {
 
 async function finishPlayers(playerIds, winnerIds = []) {
   const cycle = assignmentCounter;
-  const { data: ps } = await db.from('players').select('*').in('id', playerIds);
-  if (!ps) return;
-  for (const p of ps) {
-    // Core update — always runs regardless of wins column
-    await db.from('players').update({
-      status: 'waiting',
-      games_played: (p.games_played || 0) + 1,
-      finished_at_assignment: cycle,
-    }).eq('id', p.id);
+  const { data: ps, error: selectErr } = await db.from('players').select('*').in('id', playerIds);
+  if (selectErr) { toast('Could not load players for finish: ' + selectErr.message, 'error'); return; }
+  if (!ps || !ps.length) return;
 
-    // Wins update — only runs when the winner is selected and the column exists
+  for (const p of ps) {
+    // parseInt guards against Supabase returning numeric columns as strings,
+    // which would cause "0" + 1 = "01" (string concat) → Postgres 400 error.
+    const gamesPlayed = parseInt(p.games_played, 10) || 0;
+
+    // 1. Status + games — core columns, always exist
+    const { error: e1 } = await db.from('players').update({
+      status: 'waiting',
+      games_played: gamesPlayed + 1,
+    }).eq('id', p.id);
+    if (e1) toast('Error updating player ' + p.name + ': ' + e1.message, 'error');
+
+    // 2. Resting tracker — only if column is present in DB response
+    if ('finished_at_assignment' in p) {
+      await db.from('players').update({ finished_at_assignment: cycle }).eq('id', p.id);
+    }
+
+    // 3. Wins — only for winners, only if column is present in DB response
     if (winnerIds.includes(p.id) && 'wins' in p) {
-      await db.from('players')
-        .update({ wins: (p.wins || 0) + 1 })
-        .eq('id', p.id);
+      const currentWins = parseInt(p.wins, 10) || 0;
+      await db.from('players').update({ wins: currentWins + 1 }).eq('id', p.id);
     }
   }
 }
