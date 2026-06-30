@@ -85,39 +85,61 @@ const LEVEL_ORDER = ['novice', 'beginner', 'intermediate', 'advanced'];
 // Picks 4 players from a pre-sorted pool using a tiered level-fairness strategy.
 //
 // Tier 1 — pure same-level (4+ of one level).
-// Tier 2 — a level has ≤ 3 players: blend with the ONE immediately adjacent level.
-//           Among all viable adjacent pairs, prefer the most balanced mix
-//           (fewest players left unused from the dominant level).
-// Tier 3 — still no 4? Allow a 2-step spread (novice+beg+int or beg+int+adv)
-//           so novice never faces advanced unless absolutely necessary.
-// Tier 4 — full fallback (any mix) so nobody waits forever.
+//           EXCEPTION: skip if an immediately adjacent level has ≤ 3 players
+//           AND those players are at least as deserving (games_played ≤ the
+//           group's max) — they must be blended in, not left stranded.
+// Tier 2 — blend one adjacent step only (novice↔beg, beg↔int, int↔adv).
+//           Prioritise pairs that include a stranded level (≤ 3 players),
+//           then most balanced; preserves sort order across levels.
+// Tier 3 — two-step spread (avoids novice vs advanced).
+// Tier 4 — full fallback so nobody waits forever.
 function selectFourByLevel(sortedPool) {
-  // Build per-level pools
   const byLevel = {};
   for (const lvl of LEVEL_ORDER) byLevel[lvl] = sortedPool.filter(p => p.skill_level === lvl);
 
-  // Tier 1: 4+ of the same level
-  for (const lvl of LEVEL_ORDER) {
-    if (byLevel[lvl].length >= 4) return byLevel[lvl].slice(0, 4);
+  // Tier 1: pure same-level — but yield to a stranded adjacent level
+  for (let li = 0; li < LEVEL_ORDER.length; li++) {
+    const lvl = LEVEL_ORDER[li];
+    if (byLevel[lvl].length < 4) continue;
+
+    const top4     = byLevel[lvl].slice(0, 4);
+    const maxGames = Math.max(...top4.map(p => p.games_played || 0));
+
+    // Adjacent levels (exactly 1 step away) with ≤ 3 players that contain a
+    // player at least as deserving as the least-played player in top4.
+    const adjacentStranded = LEVEL_ORDER
+      .filter((_, i) => Math.abs(i - li) === 1)          // only ±1 step
+      .filter(l => byLevel[l].length > 0 && byLevel[l].length <= 3)
+      .some(l => byLevel[l].some(p => (p.games_played || 0) <= maxGames));
+
+    if (!adjacentStranded) return top4;
+    // else: fall through to Tier 2 so the stranded level gets included
   }
 
-  // Tier 2: one adjacent step only — pick the most balanced viable pair
+  // Tier 2: one-step adjacent mix.
+  // Use sortedPool.filter() (not concat) to preserve games-played sort order
+  // across both levels, so the fairest players are always picked first.
   const adjacentPairs = [
     ['novice',       'beginner'],
     ['beginner',     'intermediate'],
     ['intermediate', 'advanced'],
   ];
-  const viablePairs = adjacentPairs
+  const viable = adjacentPairs
     .map(([a, b]) => ({
-      players: [...byLevel[a], ...byLevel[b]],
-      balance: Math.abs(byLevel[a].length - byLevel[b].length),
+      players:     sortedPool.filter(p => p.skill_level === a || p.skill_level === b),
+      hasStranded: (byLevel[a].length > 0 && byLevel[a].length <= 3)
+                || (byLevel[b].length > 0 && byLevel[b].length <= 3),
+      balance:     Math.abs(byLevel[a].length - byLevel[b].length),
     }))
     .filter(v => v.players.length >= 4)
-    .sort((a, b) => a.balance - b.balance);   // most balanced first
+    .sort((a, b) => {
+      if (a.hasStranded !== b.hasStranded) return a.hasStranded ? -1 : 1;
+      return a.balance - b.balance;
+    });
 
-  if (viablePairs.length > 0) return viablePairs[0].players.slice(0, 4);
+  if (viable.length > 0) return viable[0].players.slice(0, 4);
 
-  // Tier 3: two-step spread — avoids pairing novice with advanced
+  // Tier 3: two-step spread — keeps novice away from advanced
   const wideGroups = [
     ['novice',   'beginner',     'intermediate'],
     ['beginner', 'intermediate', 'advanced'],
@@ -127,7 +149,7 @@ function selectFourByLevel(sortedPool) {
     if (group.length >= 4) return group.slice(0, 4);
   }
 
-  // Tier 4: full fallback — any mix so nobody sits out indefinitely
+  // Tier 4: full fallback
   return sortedPool.slice(0, 4);
 }
 
