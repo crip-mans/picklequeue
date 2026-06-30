@@ -361,11 +361,15 @@ async function init() {
   subscribeRealtime();
 }
 
-function leaveSession() {
-  if (confirm('Leave this session? You will need the code to rejoin.')) {
-    clearStoredSession();
-    window.location.href = 'index.html';
-  }
+async function leaveSession() {
+  const ok = await showConfirm({
+    title: 'Leave Session',
+    message: 'You will need the session code to rejoin. Are you sure you want to leave?',
+    confirmText: 'Leave Session',
+    cancelText: 'Stay',
+    type: 'warn',
+  });
+  if (ok) { clearStoredSession(); window.location.href = 'index.html'; }
 }
 
 function subscribeRealtime() {

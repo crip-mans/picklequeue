@@ -492,6 +492,73 @@ function toast(msg, type) {
   const timer = setTimeout(dismiss, 3500);
 }
 
+// ── CONFIRM DIALOG ────────────────────────────────────────
+// Replaces the browser's native confirm(). Returns a Promise<boolean>.
+// type: 'danger' (red) | 'warn' (yellow) | 'info' (green)
+function showConfirm({ title, message, confirmText = 'Confirm', cancelText = 'Cancel', type = 'danger' }) {
+  return new Promise(resolve => {
+    document.getElementById('_confirm-modal')?.remove();
+
+    const cfg = {
+      danger: { icon: '🗑️', btnBg: 'rgba(239,68,68,0.15)',  btnBorder: 'rgba(239,68,68,0.45)',  btnColor: '#fca5a5' },
+      warn:   { icon: '⚠️', btnBg: 'rgba(234,179,8,0.15)',  btnBorder: 'rgba(234,179,8,0.45)',  btnColor: '#fde047' },
+      info:   { icon: 'ℹ️', btnBg: 'rgba(34,197,68,0.15)',  btnBorder: 'rgba(34,197,68,0.45)',  btnColor: '#86ef9a' },
+    };
+    const c = cfg[type] || cfg.danger;
+
+    const overlay = document.createElement('div');
+    overlay.id = '_confirm-modal';
+    overlay.style.cssText = `
+      position:fixed; inset:0; z-index:9999;
+      background:rgba(13,26,13,0.88); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px);
+      display:flex; align-items:center; justify-content:center; padding:16px;
+    `;
+
+    const box = document.createElement('div');
+    box.style.cssText = `
+      background:#1a2e1a;
+      border:1px solid rgba(34,197,68,0.18);
+      border-radius:22px; padding:28px 24px 22px;
+      width:100%; max-width:340px;
+      box-shadow:0 32px 80px rgba(0,0,0,0.65), inset 0 1px 0 rgba(255,255,255,0.04);
+      animation:confirm-in .24s cubic-bezier(.34,1.2,.64,1);
+    `;
+
+    box.innerHTML = `
+      <div style="text-align:center;margin-bottom:14px;font-size:36px;line-height:1;">${c.icon}</div>
+      <h3 style="font-family:'Bebas Neue',cursive;font-size:24px;color:#d1fae5;text-align:center;margin:0 0 8px;letter-spacing:.04em;">${title}</h3>
+      <p style="font-size:13px;color:#4a7a55;text-align:center;line-height:1.6;margin:0 0 24px;">${message}</p>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <button class="_confirm-btn" id="_c_ok" style="
+          padding:13px; border-radius:12px; font-size:14px; font-weight:700; cursor:pointer;
+          background:${c.btnBg}; border:1px solid ${c.btnBorder}; color:${c.btnColor};
+          transition:opacity .15s; letter-spacing:.02em;
+        ">${confirmText}</button>
+        <button class="_confirm-btn _confirm-cancel" id="_c_cancel" style="
+          padding:13px; border-radius:12px; font-size:14px; font-weight:600; cursor:pointer;
+          background:rgba(255,255,255,0.03); border:1px solid rgba(34,197,68,0.12); color:#4a6b50;
+          transition:all .15s;
+        ">${cancelText}</button>
+      </div>
+    `;
+
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+
+    const done = val => { overlay.remove(); resolve(val); };
+    box.querySelector('#_c_ok').addEventListener('click', () => done(true));
+    box.querySelector('#_c_cancel').addEventListener('click', () => done(false));
+    overlay.addEventListener('click', e => { if (e.target === overlay) done(false); });
+
+    const onKey = e => {
+      if (e.key === 'Escape') { document.removeEventListener('keydown', onKey); done(false); }
+      if (e.key === 'Enter')  { document.removeEventListener('keydown', onKey); done(true); }
+    };
+    document.addEventListener('keydown', onKey);
+    box.querySelector('#_c_cancel').focus();
+  });
+}
+
 // Shared CSS injected into <head> by each page on load
 function injectSharedStyles() {
   const style = document.createElement('style');
@@ -516,6 +583,9 @@ function injectSharedStyles() {
     @keyframes toast-in  { from{transform:translateX(110%) scale(.92);opacity:0} to{transform:translateX(0) scale(1);opacity:1} }
     @keyframes toast-out { from{transform:translateX(0);opacity:1;max-height:120px;margin-bottom:0} to{transform:translateX(110%);opacity:0;max-height:0;margin-bottom:-8px} }
     @keyframes toast-bar { from{width:100%} to{width:0%} }
+    @keyframes confirm-in { from{transform:scale(.9) translateY(20px);opacity:0} to{transform:scale(1) translateY(0);opacity:1} }
+    ._confirm-btn:hover { opacity:.82; }
+    ._confirm-cancel:hover { border-color:rgba(34,197,68,0.3) !important; color:#6b9e75 !important; }
     .waitlist-row:hover { background: rgba(34,197,68,0.06); }
     ::-webkit-scrollbar { width: 6px; }
     ::-webkit-scrollbar-track { background: #0d1a0d; }

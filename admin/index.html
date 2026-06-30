@@ -593,7 +593,7 @@ async function toggleSession(id, currentlyActive) {
 }
 
 async function deleteSession(id, label) {
-  if (!confirm('Delete session "' + label + '"?\nPlayers using this code will be redirected to the landing page on their next visit.')) return;
+  if (!await showConfirm({ title: 'Delete Session', message: 'Delete "' + label + '"? Players using this code will be redirected to the landing page on their next visit.', confirmText: 'Delete Session', type: 'danger' })) return;
   const { error } = await db.from('sessions').delete().eq('id', id);
   if (error) { toast('Error deleting session.', 'error'); return; }
   await fetchSessions(); renderSessions();
@@ -826,7 +826,7 @@ function renderAdminPlayers() {
 // ══════════════════════════════════════════════════════════
 async function removePlayer(id) {
   const p = getPlayer(id);
-  if (!confirm('Remove ' + (p?.name || 'this player') + '?')) return;
+  if (!await showConfirm({ title: 'Remove Player', message: 'Remove <strong>' + (p?.name || 'this player') + '</strong> from the queue?', confirmText: 'Remove', type: 'danger' })) return;
   if (p?.status === 'playing') {
     const court = courts.find(c => (c.player_ids || []).includes(id));
     if (court) {
@@ -842,7 +842,7 @@ async function removePlayer(id) {
 
 async function clearAllPlayers() {
   if (!players.length) { toast('No players to clear.', 'warn'); return; }
-  if (!confirm('Remove ALL ' + players.length + ' player(s) and clear all courts?\nThis cannot be undone.')) return;
+  if (!await showConfirm({ title: 'Clear All Players', message: 'Remove all <strong>' + players.length + '</strong> player(s) and clear every court? This cannot be undone.', confirmText: 'Clear All', type: 'danger' })) return;
   if (courts.length) await db.from('courts').update({ player_ids: [] }).eq('is_active', true);
   const { error } = await db.from('players').delete().in('id', players.map(p => p.id));
   if (error) { toast('Error clearing players.', 'error'); return; }
@@ -866,7 +866,7 @@ async function addCourt() {
 
 async function removeCourt(id) {
   const court = courts.find(c => c.id === id);
-  if (!confirm('Remove "' + (court?.name || 'court') + '"?\nPlayers on it will return to waiting.')) return;
+  if (!await showConfirm({ title: 'Remove Court', message: 'Remove <strong>' + (court?.name || 'this court') + '</strong>? Players on it will return to the waiting queue.', confirmText: 'Remove Court', type: 'warn' })) return;
   if (court.player_ids?.length) {
     await db.from('players').update({ status: 'waiting' }).in('id', court.player_ids);
   }
