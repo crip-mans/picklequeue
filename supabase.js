@@ -241,23 +241,17 @@ async function requireSession() {
 // ── SETTINGS HELPER ───────────────────────────────────────
 // Safer than upsert — avoids needing a composite unique constraint.
 async function upsertSetting(key, value) {
-  // 1. Try updating a row scoped to this club.
-  //    Use .select('key') — 'id' may not exist in the settings table.
-  if (currentClubId) {
-    const { data: updated } = await db.from('settings')
-      .update({ value }).eq('key', key).eq('club_id', currentClubId).select('key');
-    if (updated?.length > 0) return;
-  }
-
-  // 2. Try plain update by key — handles rows created before club_id was added.
-  const { data: updated2 } = await db.from('settings')
-    .update({ value }).eq('key', key).select('key');
-  if (updated2?.length > 0) return;
-
-  // 3. Row truly doesn't exist yet — insert it.
   const row = { key, value };
   if (currentClubId) row.club_id = currentClubId;
-  await db.from('settings').insert(row);
+
+  // Single atomic INSERT … ON CONFLICT (key) DO UPDATE.
+  // Avoids the race between a failed UPDATE and a conflicting INSERT.
+  const { error } = await db.from('settings').upsert(row, { onConflict: 'key' });
+  if (!error) return;
+
+  // If the upsert is blocked by RLS on an old NULL-club_id row,
+  // fall back to a plain UPDATE by key which the DB will allow.
+  await db.from('settings').update({ value }).eq('key', key);
 }
 
 // ── AUTO-MATCH ALGORITHM ──────────────────────────────────
