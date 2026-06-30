@@ -241,22 +241,23 @@ async function requireSession() {
 // ── SETTINGS HELPER ───────────────────────────────────────
 // Safer than upsert — avoids needing a composite unique constraint.
 async function upsertSetting(key, value) {
-  // 1. Try updating an existing row scoped to this club
-  const updateQ = db.from('settings').update({ value }).eq('key', key).select('id');
+  // 1. Try updating a row scoped to this club.
+  //    Use .select('key') — 'id' may not exist in the settings table.
+  const updateQ = db.from('settings').update({ value }).eq('key', key).select('key');
   const { data: updated, error: ue } = currentClubId
     ? await updateQ.eq('club_id', currentClubId)
     : await updateQ;
 
-  if (!ue && updated?.length > 0) return; // updated successfully — done
+  if (!ue && updated?.length > 0) return; // row existed and was updated — done
 
-  // 2. No matching row found — try inserting
+  // 2. No matching scoped row — try inserting
   const row = { key, value };
   if (currentClubId) row.club_id = currentClubId;
   const { error: ie } = await db.from('settings').insert(row);
-  if (!ie) return; // inserted successfully — done
+  if (!ie) return; // inserted — done
 
-  // 3. Insert failed (key already exists without club_id, or club_id column missing)
-  //    Fall back to a plain update by key alone — always works
+  // 3. Insert conflicted (row exists with this key but no/different club_id).
+  //    Update by key alone as a guaranteed fallback.
   await db.from('settings').update({ value }).eq('key', key);
 }
 
