@@ -369,6 +369,7 @@ function levelDot(level) {
 let finishState = { courtId: null, selectedPairIndex: null };
 let assignState = { courtId: null, selected: new Set() };
 let sessions    = [];   // loaded from sessions table
+let _rtSubscribed = false;  // guard: only subscribe to realtime once per login
 
 // ══════════════════════════════════════════════════════════
 //  AUTH
@@ -414,6 +415,7 @@ async function unlockAdmin() {
 
 async function logoutAdmin() {
   await db.auth.signOut();
+  _rtSubscribed = false;  // allow re-subscription on next login
   document.getElementById('admin-header').classList.add('hidden');
   document.getElementById('admin-main').classList.add('hidden');
   document.getElementById('admin-gate').classList.remove('hidden');
@@ -433,9 +435,8 @@ async function init() {
 }
 
 function subscribeRealtime() {
-  // Remove any channels left over from a previous login session
-  // so we never add postgres_changes listeners after subscribe() is already called.
-  db.removeAllChannels();
+  if (_rtSubscribed) return;  // already subscribed — don't add duplicate listeners
+  _rtSubscribed = true;
 
   db.channel('players:admin')
     .on('postgres_changes', { event:'*', schema:'public', table:'players' }, async () => {
@@ -928,6 +929,10 @@ async function finishMatch() {
   if (st) st.textContent = 'Looking for next match...';
   setTimeout(async () => {
     const matched = await autoMatch(true);
+    // Explicitly re-fetch so the UI reflects the assignment even if
+    // the realtime WebSocket is still reconnecting after the session.
+    await Promise.all([fetchPlayers(), fetchCourts()]);
+    renderAll();
     if (st) st.textContent = matched ? 'Match assigned!' : 'Watching for open courts...';
   }, 1200);
 }
