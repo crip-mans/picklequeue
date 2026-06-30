@@ -162,7 +162,7 @@ function isResting(player) {
 
 async function finishPlayers(playerIds, winnerIds = []) {
   const cycle = assignmentCounter;
-  const { data: ps } = await db.from('players').select('id, games_played, wins').in('id', playerIds);
+  const { data: ps } = await db.from('players').select('*').in('id', playerIds);
   if (!ps) return;
   for (const p of ps) {
     const update = {
@@ -170,7 +170,10 @@ async function finishPlayers(playerIds, winnerIds = []) {
       games_played: (p.games_played || 0) + 1,
       finished_at_assignment: cycle,
     };
-    if (winnerIds.includes(p.id)) update.wins = (p.wins || 0) + 1;
+    // Only track wins if the column exists in the DB response
+    if (winnerIds.includes(p.id) && 'wins' in p) {
+      update.wins = (p.wins || 0) + 1;
+    }
     await db.from('players').update(update).eq('id', p.id);
   }
 }
@@ -223,16 +226,32 @@ async function requireSession() {
   } catch { window.location.href = 'index.html'; return null; }
 }
 
+// ── SETTINGS HELPER ───────────────────────────────────────
+// Safer than upsert — avoids needing a composite unique constraint.
+async function upsertSetting(key, value) {
+  const { data } = await db.from('settings').select('id')
+    .eq('key', key).eq('club_id', currentClubId).maybeSingle();
+  if (data) {
+    await db.from('settings').update({ value }).eq('key', key).eq('club_id', currentClubId);
+  } else {
+    await db.from('settings').insert({ key, value, club_id: currentClubId });
+  }
+}
+
 // ── AUTO-MATCH ALGORITHM ──────────────────────────────────
 async function autoMatch(silent = false) {
   const { data: freshPlayers, error: pe } = await db.from('players').select('*').eq('club_id', currentClubId);
   const { data: freshCourts, error: ce } = await db.from('courts').select('*').eq('is_active', true).eq('club_id', currentClubId);
   
-  if (pe || ce || !freshPlayers || !freshCourts) return false;
+  if (pe || ce) {
+    if (!silent) toast('Auto-match error: could not read database.', 'error');
+    return false;
+  }
+  if (!freshPlayers || !freshCourts) return false;
 
   const openCourt = freshCourts.find(c => !c.player_ids || c.player_ids.length < 4);
   if (!openCourt) {
-    if (!silent) toast('No open courts.', 'warn');
+    if (!silent) toast('No open courts available.', 'warn');
     return false;
   }
 
@@ -251,7 +270,10 @@ async function autoMatch(silent = false) {
   }
 
   let waiting = freshPlayers.filter(p => p.status === 'waiting');
-  if (waiting.length < 4) return false;
+  if (waiting.length < 4) {
+    if (!silent) toast('Not enough players waiting — need at least 4.', 'warn');
+    return false;
+  }
 
   // 1. Anti-back-to-back filter
   let eligible = waiting.filter(p => {
@@ -290,13 +312,7 @@ async function autoMatch(silent = false) {
   settings.assignment_cycle = assignmentCycle;
   assignmentCounter = assignmentCycle;
 
-  await db
-    .from('settings')
-    .upsert({
-      key: 'assignment_cycle',
-      value: String(assignmentCycle),
-      club_id: currentClubId,
-    }, { onConflict: 'key,club_id' });
+  await upsertSetting('assignment_cycle', String(assignmentCycle));
 
   await assignPlayersToCourt(
     openCourt.id,

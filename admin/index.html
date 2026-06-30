@@ -649,7 +649,9 @@ function saveLimit(type, raw) {
     }
 
     const key = type === 'min' ? 'min_players' : 'max_players';
-    const { error } = await db.from('settings').upsert({ key, value: String(val), club_id: currentClubId }, { onConflict:'key,club_id' });
+    const { error } = await (async () => {
+      await upsertSetting(key, String(val)); return {};
+    })();
     if (error) { toast('Error saving limit.', 'error'); return; }
     renderLimitsSummary();
     toast((type==='min'?'Min':'Max') + ' set to ' + val + '.', 'success');
@@ -884,19 +886,13 @@ async function finishMatch() {
   closeFinishModal();
   toast('Match done! Players resting for ' + restWindowSize() + ' assignment(s). &#127955;', 'success');
 
-  // Auto-match fires automatically ~1s later (gives realtime time to propagate)
+  // Auto-match fires after a short delay so DB writes propagate first
+  const st = document.getElementById('automatch-status');
+  if (st) st.textContent = 'Looking for next match...';
   setTimeout(async () => {
-    await fetchPlayers();
-    await fetchCourts();
-    await fetchSettings();   // refreshes assignmentCounter from DB
-    const open  = courts.find(c => !c.player_ids || c.player_ids.length < 4);
-    const avail = players.filter(p => p.status === 'waiting');
-    if (open && avail.length >= 4) {
-      const st = document.getElementById('automatch-status');
-      if (st) st.textContent = 'Auto-matching for ' + open.name + '...';
-      await autoMatch(true);
-    }
-  }, 1000);
+    const matched = await autoMatch(true);
+    if (st) st.textContent = matched ? 'Match assigned!' : 'Watching for open courts...';
+  }, 1200);
 }
 
 function closeFinishModal() {
