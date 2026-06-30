@@ -171,16 +171,19 @@ async function finishPlayers(playerIds, winnerIds = []) {
   const { data: ps } = await db.from('players').select('*').in('id', playerIds);
   if (!ps) return;
   for (const p of ps) {
-    const update = {
+    // Core update — always runs regardless of wins column
+    await db.from('players').update({
       status: 'waiting',
       games_played: (p.games_played || 0) + 1,
       finished_at_assignment: cycle,
-    };
-    // Only track wins if the column exists in the DB response
+    }).eq('id', p.id);
+
+    // Wins update — only runs when the winner is selected and the column exists
     if (winnerIds.includes(p.id) && 'wins' in p) {
-      update.wins = (p.wins || 0) + 1;
+      await db.from('players')
+        .update({ wins: (p.wins || 0) + 1 })
+        .eq('id', p.id);
     }
-    await db.from('players').update(update).eq('id', p.id);
   }
 }
 
@@ -235,16 +238,23 @@ async function requireSession() {
 // ── SETTINGS HELPER ───────────────────────────────────────
 // Safer than upsert — avoids needing a composite unique constraint.
 async function upsertSetting(key, value) {
-  const { data } = await withClub(
-    db.from('settings').select('id').eq('key', key)
-  ).maybeSingle();
-  if (data) {
-    await withClub(db.from('settings').update({ value }).eq('key', key));
-  } else {
-    const row = { key, value };
-    if (currentClubId) row.club_id = currentClubId;
-    await db.from('settings').insert(row);
-  }
+  // 1. Try updating an existing row scoped to this club
+  const updateQ = db.from('settings').update({ value }).eq('key', key).select('id');
+  const { data: updated, error: ue } = currentClubId
+    ? await updateQ.eq('club_id', currentClubId)
+    : await updateQ;
+
+  if (!ue && updated?.length > 0) return; // updated successfully — done
+
+  // 2. No matching row found — try inserting
+  const row = { key, value };
+  if (currentClubId) row.club_id = currentClubId;
+  const { error: ie } = await db.from('settings').insert(row);
+  if (!ie) return; // inserted successfully — done
+
+  // 3. Insert failed (key already exists without club_id, or club_id column missing)
+  //    Fall back to a plain update by key alone — always works
+  await db.from('settings').update({ value }).eq('key', key);
 }
 
 // ── AUTO-MATCH ALGORITHM ──────────────────────────────────
