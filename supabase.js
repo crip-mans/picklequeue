@@ -243,22 +243,21 @@ async function requireSession() {
 async function upsertSetting(key, value) {
   // 1. Try updating a row scoped to this club.
   //    Use .select('key') — 'id' may not exist in the settings table.
-  const updateQ = db.from('settings').update({ value }).eq('key', key).select('key');
-  const { data: updated, error: ue } = currentClubId
-    ? await updateQ.eq('club_id', currentClubId)
-    : await updateQ;
+  if (currentClubId) {
+    const { data: updated } = await db.from('settings')
+      .update({ value }).eq('key', key).eq('club_id', currentClubId).select('key');
+    if (updated?.length > 0) return;
+  }
 
-  if (!ue && updated?.length > 0) return; // row existed and was updated — done
+  // 2. Try plain update by key — handles rows created before club_id was added.
+  const { data: updated2 } = await db.from('settings')
+    .update({ value }).eq('key', key).select('key');
+  if (updated2?.length > 0) return;
 
-  // 2. No matching scoped row — try inserting
+  // 3. Row truly doesn't exist yet — insert it.
   const row = { key, value };
   if (currentClubId) row.club_id = currentClubId;
-  const { error: ie } = await db.from('settings').insert(row);
-  if (!ie) return; // inserted — done
-
-  // 3. Insert conflicted (row exists with this key but no/different club_id).
-  //    Update by key alone as a guaranteed fallback.
-  await db.from('settings').update({ value }).eq('key', key);
+  await db.from('settings').insert(row);
 }
 
 // ── AUTO-MATCH ALGORITHM ──────────────────────────────────

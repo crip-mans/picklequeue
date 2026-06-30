@@ -433,6 +433,10 @@ async function init() {
 }
 
 function subscribeRealtime() {
+  // Remove any channels left over from a previous login session
+  // so we never add postgres_changes listeners after subscribe() is already called.
+  db.removeAllChannels();
+
   db.channel('players:admin')
     .on('postgres_changes', { event:'*', schema:'public', table:'players' }, async () => {
       await fetchPlayers(); renderAll();
