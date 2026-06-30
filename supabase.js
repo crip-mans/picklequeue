@@ -160,16 +160,18 @@ function isResting(player) {
   return (assignmentCounter - player.finished_at_assignment) < restWindowSize();
 }
 
-async function finishPlayers(playerIds) {
+async function finishPlayers(playerIds, winnerIds = []) {
   const cycle = assignmentCounter;
-  const { data: ps } = await db.from('players').select('id, games_played').in('id', playerIds);
+  const { data: ps } = await db.from('players').select('id, games_played, wins').in('id', playerIds);
   if (!ps) return;
   for (const p of ps) {
-    await db.from('players').update({
+    const update = {
       status: 'waiting',
       games_played: (p.games_played || 0) + 1,
       finished_at_assignment: cycle,
-    }).eq('id', p.id);
+    };
+    if (winnerIds.includes(p.id)) update.wins = (p.wins || 0) + 1;
+    await db.from('players').update(update).eq('id', p.id);
   }
 }
 

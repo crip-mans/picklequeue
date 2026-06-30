@@ -876,12 +876,9 @@ async function finishMatch() {
   const court = courts.find(c => c.id === finishState.courtId);
   const pids  = court.player_ids || [];
 
-  // finishPlayers() is in supabase.js:
-  //   - games_played + 1
-  //   - status = 'waiting'
-  //   - finished_at_assignment = assignmentCounter  ← rest window starts now
-  //   - queue_priority recomputed
-  await finishPlayers(pids);
+  // Winners = the selected pair (index 0 = team A, index 1 = team B)
+  const winnerIds = pids.slice(finishState.selectedPairIndex * 2, finishState.selectedPairIndex * 2 + 2);
+  await finishPlayers(pids, winnerIds);
   await db.from('courts').update({ player_ids: [] }).eq('id', court.id);
 
   closeFinishModal();

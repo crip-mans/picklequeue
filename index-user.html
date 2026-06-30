@@ -100,14 +100,11 @@
     <div id="queue-status-pill" class="ml-auto hidden shrink-0">
       <span id="queue-status-text" class="text-xs px-2 sm:px-3 py-1 rounded-full border font-medium whitespace-nowrap"></span>
     </div>
-    <button onclick="leaveSession()" title="Leave session"
-      class="shrink-0 text-green-800 hover:text-red-400 transition-colors p-1.5 rounded-lg hover:bg-red-950/30 text-base leading-none">
-      &#x2715;
-    </button>
+    <!-- leave button removed — Log Out is in bottom nav -->
   </div>
 </header>
 
-<main class="max-w-5xl mx-auto px-3 sm:px-4 py-4 sm:py-6 flex flex-col gap-4 sm:gap-6">
+<main id="home-view" class="max-w-5xl mx-auto px-3 sm:px-4 py-4 sm:py-6 pb-24 flex flex-col gap-4 sm:gap-6">
 
   <!-- ══════════════════════════════════════════════
        JOIN FORM
@@ -217,6 +214,65 @@
   </div>
 </main>
 
+<!-- ══════════════════════════════════════════════
+     RANKING VIEW (hidden until tab selected)
+══════════════════════════════════════════════ -->
+<div id="ranking-view" class="hidden max-w-5xl mx-auto px-3 sm:px-4 py-4 sm:py-6 pb-24">
+
+  <!-- Header -->
+  <div class="flex items-center gap-3 mb-4">
+    <div>
+      <h2 class="display-font text-3xl text-pickle-400 leading-none">Rankings</h2>
+      <p class="text-green-600 text-xs mt-0.5">Based on total wins · ties allowed</p>
+    </div>
+    <span class="ml-auto bg-green-950 text-green-500 text-xs px-2.5 py-1 rounded-full font-medium" id="ranking-count">0 players</span>
+  </div>
+
+  <!-- Leaderboard card -->
+  <div class="bg-court border border-green-900/60 rounded-2xl overflow-hidden">
+    <div id="ranking-list">
+      <div class="text-green-700 text-sm py-10 text-center">Loading rankings...</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     BOTTOM NAVIGATION
+══════════════════════════════════════════════ -->
+<nav class="fixed bottom-0 left-0 right-0 z-40 bg-ink/95 backdrop-blur-sm border-t border-green-900/50"
+     style="padding-bottom: env(safe-area-inset-bottom)">
+  <div class="max-w-5xl mx-auto grid grid-cols-3">
+
+    <button id="nav-home" onclick="showTab('home')"
+      class="flex flex-col items-center gap-1 py-3 px-2 transition-colors text-pickle-400">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+          d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+      </svg>
+      <span class="text-xs font-semibold">Home</span>
+    </button>
+
+    <button id="nav-ranking" onclick="showTab('ranking')"
+      class="flex flex-col items-center gap-1 py-3 px-2 transition-colors text-green-700">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+          d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+      </svg>
+      <span class="text-xs font-semibold">Rankings</span>
+    </button>
+
+    <button onclick="leaveSession()"
+      class="flex flex-col items-center gap-1 py-3 px-2 transition-colors text-green-700 hover:text-red-400">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+          d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+      </svg>
+      <span class="text-xs font-semibold">Log Out</span>
+    </button>
+
+  </div>
+</nav>
+
 <script>
 injectSharedStyles();
 
@@ -300,11 +356,93 @@ function subscribeRealtime() {
     }).subscribe();
 }
 
+// ══════════════════════════════════════════════════════
+//  TAB NAVIGATION
+// ══════════════════════════════════════════════════════
+let currentTab = 'home';
+
+function showTab(tab) {
+  currentTab = tab;
+  document.getElementById('home-view').classList.toggle('hidden', tab !== 'home');
+  document.getElementById('ranking-view').classList.toggle('hidden', tab !== 'ranking');
+
+  const activeClass   = 'text-pickle-400';
+  const inactiveClass = 'text-green-700';
+  document.getElementById('nav-home').className    = document.getElementById('nav-home').className.replace(tab === 'home'    ? inactiveClass : activeClass, tab === 'home'    ? activeClass : inactiveClass);
+  document.getElementById('nav-ranking').className = document.getElementById('nav-ranking').className.replace(tab === 'ranking' ? inactiveClass : activeClass, tab === 'ranking' ? activeClass : inactiveClass);
+
+  if (tab === 'ranking') renderRanking();
+}
+
 function renderAll() {
   renderQueueStatus();
   renderCourts();
   renderWaitlist();
   renderUpNext();
+  if (currentTab === 'ranking') renderRanking();
+}
+
+// ══════════════════════════════════════════════════════
+//  RANKINGS
+// ══════════════════════════════════════════════════════
+function renderRanking() {
+  const el = document.getElementById('ranking-list');
+  const countEl = document.getElementById('ranking-count');
+  if (!el) return;
+
+  if (!players.length) {
+    el.innerHTML = '<div class="text-green-700 text-sm py-10 text-center">No players yet</div>';
+    countEl.textContent = '0 players';
+    return;
+  }
+
+  const sorted = [...players].sort((a, b) => {
+    const wa = a.wins || 0, wb = b.wins || 0;
+    if (wb !== wa) return wb - wa;
+    return (b.games_played || 0) - (a.games_played || 0);
+  });
+
+  countEl.textContent = sorted.length + ' player' + (sorted.length !== 1 ? 's' : '');
+
+  let displayRank = 1;
+  el.innerHTML = sorted.map((p, i) => {
+    if (i > 0 && (p.wins || 0) < (sorted[i - 1].wins || 0)) displayRank = i + 1;
+
+    const medal    = displayRank === 1 ? '🥇' : displayRank === 2 ? '🥈' : displayRank === 3 ? '🥉' : null;
+    const wins     = p.wins || 0;
+    const isTop    = displayRank <= 3;
+    const isPlaying = p.status === 'playing';
+
+    return `
+    <div class="flex items-center px-4 py-3.5 gap-3 transition-colors
+      ${i > 0 ? 'border-t border-green-900/30' : ''}
+      ${isTop ? 'bg-pickle-950/30' : 'hover:bg-green-950/20'}">
+
+      <!-- Rank indicator -->
+      <div class="w-8 shrink-0 text-center">
+        ${medal
+          ? `<span class="text-2xl leading-none">${medal}</span>`
+          : `<span class="text-green-700 text-sm font-mono font-bold">${displayRank}</span>`}
+      </div>
+
+      <!-- Name + meta -->
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-1.5 flex-wrap">
+          <span class="text-sm font-semibold truncate
+            ${isTop ? 'text-green-100' : 'text-green-200'}">${esc(p.name)}</span>
+          <span class="text-sm leading-none">${levelDot(p.skill_level)}</span>
+          ${isPlaying ? `<span class="text-[10px] font-bold text-pickle-500">▶ playing</span>` : ''}
+        </div>
+        <span class="text-xs text-green-700">${p.games_played || 0} game${(p.games_played || 0) !== 1 ? 's' : ''} played</span>
+      </div>
+
+      <!-- Win count -->
+      <div class="text-right shrink-0">
+        <div class="text-2xl font-bold leading-none ${wins > 0 ? 'text-pickle-400' : 'text-green-800'}">${wins}</div>
+        <div class="text-[10px] uppercase tracking-wide font-semibold mt-0.5 ${wins > 0 ? 'text-green-600' : 'text-green-800'}">${wins === 1 ? 'win' : 'wins'}</div>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 // ══════════════════════════════════════════════════════
