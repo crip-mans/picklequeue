@@ -444,11 +444,10 @@ function renderRanking() {
     return;
   }
 
-  // Sort by wins first, then by actual games played (not queue-inflated value)
   const sorted = [...players].sort((a, b) => {
     const wa = a.wins || 0, wb = b.wins || 0;
     if (wb !== wa) return wb - wa;
-    return actualGames(b) - actualGames(a);
+    return (b.wins || 0) - (a.wins || 0);
   });
 
   countEl.textContent = sorted.length + ' player' + (sorted.length !== 1 ? 's' : '');
@@ -461,7 +460,6 @@ function renderRanking() {
     const wins      = p.wins || 0;
     const isTop     = displayRank <= 3;
     const isPlaying = p.status === 'playing';
-    const played    = actualGames(p);   // real games this session, not the queue-offset value
 
     return `
     <div class="flex items-center px-4 py-3.5 gap-3 transition-colors
@@ -475,7 +473,7 @@ function renderRanking() {
           : `<span class="text-green-700 text-sm font-mono font-bold">${displayRank}</span>`}
       </div>
 
-      <!-- Name + meta -->
+      <!-- Name + level -->
       <div class="flex-1 min-w-0">
         <div class="flex items-center gap-1.5 flex-wrap">
           <span class="text-sm font-semibold truncate
@@ -483,7 +481,6 @@ function renderRanking() {
           <span class="text-sm leading-none">${levelDot(p.skill_level)}</span>
           ${isPlaying ? `<span class="text-[10px] font-bold text-pickle-500">▶ playing</span>` : ''}
         </div>
-        <span class="text-xs text-green-700">${played} game${played !== 1 ? 's' : ''} played</span>
       </div>
 
       <!-- Win count -->
@@ -622,7 +619,7 @@ function renderWaitlist() {
         </div>
         <div class="flex items-center gap-2 mt-0.5">${levelChip(p.skill_level)}</div>
       </div>
-      <span class="text-xs shrink-0 ${actualGames(p) === 0 ? 'text-pickle-400 font-bold' : 'text-green-600'}">${actualGames(p)}g</span>
+      <span class="text-xs shrink-0 ${p.games_played === 0 ? 'text-pickle-400 font-bold' : 'text-green-600'}">${p.games_played}g</span>
     </div>`;
   });
 
@@ -644,7 +641,7 @@ function renderWaitlist() {
         </div>
         <div class="flex items-center gap-2 mt-0.5">${levelChip(p.skill_level)}</div>
       </div>
-      <span class="text-xs shrink-0 text-pickle-700">${actualGames(p)}g</span>
+      <span class="text-xs shrink-0 text-pickle-700">${p.games_played}g</span>
     </div>`);
 
   el.innerHTML = [...waitingRows, divider, ...playingRows].join('');

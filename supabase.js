@@ -207,16 +207,10 @@ async function registerNewPlayer(name, skillLevel) {
     name,
     skill_level: skillLevel,
     status: 'waiting',
-    games_played: median,   // queue priority: starts at median so late-joiners aren't penalised
-    games_offset: median,   // stored so rankings can show actual games played this session
+    games_played: median,
     club_id: currentClubId,
   });
   return error;
-}
-
-// Actual games played this session = games_played minus the starting offset
-function actualGames(player) {
-  return Math.max(0, (player.games_played || 0) - (player.games_offset || 0));
 }
 
 // ── REST WINDOW ────────────────────────────────────────────
