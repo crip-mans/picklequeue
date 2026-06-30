@@ -82,24 +82,52 @@ function getPlayer(id) { return players.find(p => p.id === id); }
 // Skill level order — used for adjacent-level fallback matching
 const LEVEL_ORDER = ['novice', 'beginner', 'intermediate', 'advanced'];
 
-// Picks 4 players from a pre-sorted pool, preferring same-level matches.
-// Falls back to adjacent levels (e.g. beginner+intermediate), then any mix.
+// Picks 4 players from a pre-sorted pool using a tiered level-fairness strategy.
+//
+// Tier 1 — pure same-level (4+ of one level).
+// Tier 2 — a level has ≤ 3 players: blend with the ONE immediately adjacent level.
+//           Among all viable adjacent pairs, prefer the most balanced mix
+//           (fewest players left unused from the dominant level).
+// Tier 3 — still no 4? Allow a 2-step spread (novice+beg+int or beg+int+adv)
+//           so novice never faces advanced unless absolutely necessary.
+// Tier 4 — full fallback (any mix) so nobody waits forever.
 function selectFourByLevel(sortedPool) {
-  // 1. Strict same-level: pick first level that has 4+ players
-  for (const level of LEVEL_ORDER) {
-    const group = sortedPool.filter(p => p.skill_level === level);
+  // Build per-level pools
+  const byLevel = {};
+  for (const lvl of LEVEL_ORDER) byLevel[lvl] = sortedPool.filter(p => p.skill_level === lvl);
+
+  // Tier 1: 4+ of the same level
+  for (const lvl of LEVEL_ORDER) {
+    if (byLevel[lvl].length >= 4) return byLevel[lvl].slice(0, 4);
+  }
+
+  // Tier 2: one adjacent step only — pick the most balanced viable pair
+  const adjacentPairs = [
+    ['novice',       'beginner'],
+    ['beginner',     'intermediate'],
+    ['intermediate', 'advanced'],
+  ];
+  const viablePairs = adjacentPairs
+    .map(([a, b]) => ({
+      players: [...byLevel[a], ...byLevel[b]],
+      balance: Math.abs(byLevel[a].length - byLevel[b].length),
+    }))
+    .filter(v => v.players.length >= 4)
+    .sort((a, b) => a.balance - b.balance);   // most balanced first
+
+  if (viablePairs.length > 0) return viablePairs[0].players.slice(0, 4);
+
+  // Tier 3: two-step spread — avoids pairing novice with advanced
+  const wideGroups = [
+    ['novice',   'beginner',     'intermediate'],
+    ['beginner', 'intermediate', 'advanced'],
+  ];
+  for (const levels of wideGroups) {
+    const group = sortedPool.filter(p => levels.includes(p.skill_level));
     if (group.length >= 4) return group.slice(0, 4);
   }
 
-  // 2. Adjacent levels: novice+beginner, beginner+intermediate, intermediate+advanced
-  for (let i = 0; i < LEVEL_ORDER.length - 1; i++) {
-    const group = sortedPool.filter(p =>
-      p.skill_level === LEVEL_ORDER[i] || p.skill_level === LEVEL_ORDER[i + 1]
-    );
-    if (group.length >= 4) return group.slice(0, 4);
-  }
-
-  // 3. Full fallback — any mix (avoids everyone waiting forever)
+  // Tier 4: full fallback — any mix so nobody sits out indefinitely
   return sortedPool.slice(0, 4);
 }
 

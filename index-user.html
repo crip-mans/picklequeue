@@ -222,7 +222,7 @@
     <!-- Waiting Queue -->
     <section>
       <div class="flex items-center gap-2 mb-3">
-        <h2 class="display-font text-xl text-green-300">Waiting Queue</h2>
+        <h2 class="display-font text-xl text-green-300">Queue</h2>
         <span id="waitlist-count" class="bg-green-950 text-green-500 text-xs px-2 py-0.5 rounded-full font-medium">0</span>
       </div>
       <div class="bg-court border border-green-900/60 rounded-2xl overflow-hidden">
@@ -232,7 +232,7 @@
           <span class="flex-1">Player</span>
           <span class="text-right">Games</span>
         </div>
-        <div id="waitlist-body" class="divide-y divide-green-900/30 max-h-[420px] overflow-y-auto">
+        <div id="waitlist-body" class="divide-y divide-green-900/30">
           <div class="text-green-700 text-sm py-8 text-center">Queue is empty — be first!</div>
         </div>
       </div>
@@ -577,52 +577,74 @@ function renderCourts() {
 }
 
 // ══════════════════════════════════════════════════════
-//  WAITLIST
-//  Col layout: # | name+badges | level chip | games
+//  QUEUE — shows ALL players (waiting + playing)
+//  Waiting players listed by position; playing players
+//  shown at the bottom with an "On Court" indicator.
 // ══════════════════════════════════════════════════════
 function renderWaitlist() {
   const waiting = players.filter(p => p.status === 'waiting');
-  document.getElementById('waitlist-count').textContent = waiting.length;
+  const playing = players.filter(p => p.status === 'playing');
+
+  // Badge shows waiting count / total
+  const countEl = document.getElementById('waitlist-count');
+  if (players.length) {
+    countEl.textContent = waiting.length + ' waiting · ' + players.length + ' total';
+  } else {
+    countEl.textContent = '0';
+  }
+
   const el = document.getElementById('waitlist-body');
-  if (!waiting.length) {
+  if (!players.length) {
     el.innerHTML = `<div class="text-green-700 text-sm py-8 text-center">Queue is empty — be first!</div>`;
     return;
   }
 
   const topIds = getNextFourIds(waiting);
 
-  el.innerHTML = waiting.map((p, i) => {
+  const waitingRows = waiting.map((p, i) => {
     const isNext  = topIds.includes(p.id);
     const resting = isResting(p);
     return `
     <div class="waitlist-row flex items-center px-3 sm:px-4 py-3 gap-2 sm:gap-3 transition-colors
-      ${isNext   ? 'bg-pickle-900/20'    : ''}
-      ${resting && !isNext ? 'bg-yellow-950/20' : ''}">
-
-      <!-- Position -->
-      <span class="text-green-700 text-xs font-mono w-5 text-center shrink-0">${i+1}</span>
-
-      <!-- Name + badges + level stacked -->
+      ${isNext ? 'bg-pickle-900/20' : resting ? 'bg-yellow-950/10' : ''}">
+      <span class="text-green-700 text-xs font-mono w-5 text-center shrink-0">${i + 1}</span>
       <div class="flex-1 min-w-0">
         <div class="flex items-center gap-1.5 flex-wrap">
           <span class="text-sm font-medium truncate
-            ${isNext ? 'text-pickle-300' : resting ? 'text-yellow-500' : 'text-green-200'}">
+            ${isNext ? 'text-pickle-300 font-semibold' : resting ? 'text-yellow-500/80' : 'text-green-200'}">
             ${esc(p.name)}
           </span>
           ${isNext ? `<span class="text-[10px] bg-pickle-900/60 border border-pickle-700/40 text-pickle-400 px-1.5 py-0.5 rounded-full font-bold leading-none">Next</span>` : ''}
           ${resting && !isNext ? `<span class="text-[10px] bg-yellow-950 border border-yellow-800/60 text-yellow-500 px-1.5 py-0.5 rounded-full font-bold leading-none">&#x23F3; Resting</span>` : ''}
         </div>
-        <div class="flex items-center gap-2 mt-0.5">
-          ${levelChip(p.skill_level)}
-        </div>
+        <div class="flex items-center gap-2 mt-0.5">${levelChip(p.skill_level)}</div>
       </div>
-
-      <!-- Games -->
-      <span class="text-xs shrink-0 ${p.games_played === 0 ? 'text-pickle-400 font-bold' : 'text-green-600'}">
-        ${p.games_played}g
-      </span>
+      <span class="text-xs shrink-0 ${p.games_played === 0 ? 'text-pickle-400 font-bold' : 'text-green-600'}">${p.games_played}g</span>
     </div>`;
-  }).join('');
+  });
+
+  const divider = playing.length ? `
+    <div class="flex items-center gap-2 px-3 sm:px-4 py-2 bg-pickle-950/30 border-t border-pickle-900/40">
+      <span class="live-dot w-1.5 h-1.5 rounded-full bg-pickle-500 inline-block shrink-0"></span>
+      <span class="text-[10px] font-bold text-pickle-600 uppercase tracking-widest">On Court</span>
+    </div>` : '';
+
+  const playingRows = playing.map(p => `
+    <div class="waitlist-row flex items-center px-3 sm:px-4 py-3 gap-2 sm:gap-3 opacity-60">
+      <span class="w-5 shrink-0 text-center text-pickle-700">
+        <svg class="w-3 h-3 inline" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+      </span>
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-1.5 flex-wrap">
+          <span class="text-sm text-pickle-400 font-medium truncate">${esc(p.name)}</span>
+          <span class="text-[10px] bg-pickle-900/50 border border-pickle-700/30 text-pickle-500 px-1.5 py-0.5 rounded-full font-bold leading-none">Playing</span>
+        </div>
+        <div class="flex items-center gap-2 mt-0.5">${levelChip(p.skill_level)}</div>
+      </div>
+      <span class="text-xs shrink-0 text-pickle-700">${p.games_played}g</span>
+    </div>`);
+
+  el.innerHTML = [...waitingRows, divider, ...playingRows].join('');
 }
 
 // ══════════════════════════════════════════════════════
