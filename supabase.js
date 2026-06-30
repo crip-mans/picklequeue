@@ -82,22 +82,26 @@ function getPlayer(id) { return players.find(p => p.id === id); }
 // Skill level order — used for adjacent-level fallback matching
 const LEVEL_ORDER = ['novice', 'beginner', 'intermediate', 'advanced'];
 
-// Picks 4 players from a pre-sorted pool using a tiered level-fairness strategy.
+// Picks 4 players from a pre-sorted pool using a fairness-first level strategy.
 //
 // Tier 1 — pure same-level (4+ of one level).
-//           EXCEPTION: skip if an immediately adjacent level has ≤ 3 players
-//           AND those players are at least as deserving (games_played ≤ the
-//           group's max) — they must be blended in, not left stranded.
-// Tier 2 — blend one adjacent step only (novice↔beg, beg↔int, int↔adv).
-//           Prioritise pairs that include a stranded level (≤ 3 players),
-//           then most balanced; preserves sort order across levels.
-// Tier 3 — two-step spread (avoids novice vs advanced).
-// Tier 4 — full fallback so nobody waits forever.
+//           Skipped when an immediately adjacent level has ≤ 3 players AND
+//           those players are at least as deserving (games_played ≤ group max).
+//
+// Tier 2+ — build all candidate pools (adjacent pair OR 2-step spread),
+//            filter for stranded levels, then rank by the TOTAL games-played
+//            of the top-4 pick. This ensures that whichever stranded group is
+//            most deserving (fewest games) wins — preventing both novice AND
+//            advanced from sitting out indefinitely when only one group can be
+//            served per match.
+//            Tiebreak: prefer tighter skill spread (2-level > 3-level).
+//
+// Full fallback — any 4 so nobody waits forever.
 function selectFourByLevel(sortedPool) {
   const byLevel = {};
   for (const lvl of LEVEL_ORDER) byLevel[lvl] = sortedPool.filter(p => p.skill_level === lvl);
 
-  // Tier 1: pure same-level — but yield to a stranded adjacent level
+  // ── Tier 1: pure same-level ───────────────────────────
   for (let li = 0; li < LEVEL_ORDER.length; li++) {
     const lvl = LEVEL_ORDER[li];
     if (byLevel[lvl].length < 4) continue;
@@ -105,52 +109,48 @@ function selectFourByLevel(sortedPool) {
     const top4     = byLevel[lvl].slice(0, 4);
     const maxGames = Math.max(...top4.map(p => p.games_played || 0));
 
-    // Adjacent levels (exactly 1 step away) with ≤ 3 players that contain a
-    // player at least as deserving as the least-played player in top4.
+    // Yield to an adjacent stranded level whose players are at least as deserving
     const adjacentStranded = LEVEL_ORDER
-      .filter((_, i) => Math.abs(i - li) === 1)          // only ±1 step
+      .filter((_, i) => Math.abs(i - li) === 1)
       .filter(l => byLevel[l].length > 0 && byLevel[l].length <= 3)
-      .some(l => byLevel[l].some(p => (p.games_played || 0) <= maxGames));
+      .some(l  => byLevel[l].some(p => (p.games_played || 0) <= maxGames));
 
     if (!adjacentStranded) return top4;
-    // else: fall through to Tier 2 so the stranded level gets included
   }
 
-  // Tier 2: one-step adjacent mix.
-  // Use sortedPool.filter() (not concat) to preserve games-played sort order
-  // across both levels, so the fairest players are always picked first.
-  const adjacentPairs = [
+  // ── Tier 2+: scored candidate pools ───────────────────
+  // All valid level combinations (adjacent first, then 2-step)
+  const levelSets = [
     ['novice',       'beginner'],
     ['beginner',     'intermediate'],
     ['intermediate', 'advanced'],
+    ['novice',       'beginner',     'intermediate'],
+    ['beginner',     'intermediate', 'advanced'],
   ];
-  const viable = adjacentPairs
-    .map(([a, b]) => ({
-      players:     sortedPool.filter(p => p.skill_level === a || p.skill_level === b),
-      hasStranded: (byLevel[a].length > 0 && byLevel[a].length <= 3)
-                || (byLevel[b].length > 0 && byLevel[b].length <= 3),
-      balance:     Math.abs(byLevel[a].length - byLevel[b].length),
-    }))
-    .filter(v => v.players.length >= 4)
-    .sort((a, b) => {
-      if (a.hasStranded !== b.hasStranded) return a.hasStranded ? -1 : 1;
-      return a.balance - b.balance;
-    });
 
-  if (viable.length > 0) return viable[0].players.slice(0, 4);
+  const candidates = levelSets
+    .map(levels => {
+      const players = sortedPool.filter(p => levels.includes(p.skill_level));
+      if (players.length < 4) return null;
+      const pick     = players.slice(0, 4);
+      const gamesSum = pick.reduce((s, p) => s + (p.games_played || 0), 0);
+      const hasStranded = levels.some(l => byLevel[l].length > 0 && byLevel[l].length <= 3);
+      return { pick, gamesSum, hasStranded, spread: levels.length };
+    })
+    .filter(Boolean);
 
-  // Tier 3: two-step spread — keeps novice away from advanced
-  const wideGroups = [
-    ['novice',   'beginner',     'intermediate'],
-    ['beginner', 'intermediate', 'advanced'],
-  ];
-  for (const levels of wideGroups) {
-    const group = sortedPool.filter(p => levels.includes(p.skill_level));
-    if (group.length >= 4) return group.slice(0, 4);
-  }
+  if (candidates.length === 0) return sortedPool.slice(0, 4);
 
-  // Tier 4: full fallback
-  return sortedPool.slice(0, 4);
+  // Prefer pools that include a stranded level; among those, pick the one
+  // whose top-4 have the fewest total games (most deserving). Tiebreak: tighter spread.
+  const withStranded = candidates.filter(c => c.hasStranded);
+  const pool = withStranded.length > 0 ? withStranded : candidates;
+
+  pool.sort((a, b) => a.gamesSum !== b.gamesSum
+    ? a.gamesSum - b.gamesSum      // fewest games = highest priority
+    : a.spread   - b.spread);      // tighter skill spread as tiebreak
+
+  return pool[0].pick;
 }
 
 // Returns next 4 player IDs in deterministic priority order:

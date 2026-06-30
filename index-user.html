@@ -602,8 +602,9 @@ function renderWaitlist() {
   const topIds = getNextFourIds(waiting);
 
   const waitingRows = waiting.map((p, i) => {
-    const isNext  = topIds.includes(p.id);
     const resting = isResting(p);
+    // Resting always takes priority — never show "Next" for a player still in their rest window
+    const isNext  = !resting && topIds.includes(p.id);
     return `
     <div class="waitlist-row flex items-center px-3 sm:px-4 py-3 gap-2 sm:gap-3 transition-colors
       ${isNext ? 'bg-pickle-900/20' : resting ? 'bg-yellow-950/10' : ''}">
@@ -615,7 +616,7 @@ function renderWaitlist() {
             ${esc(p.name)}
           </span>
           ${isNext ? `<span class="text-[10px] bg-pickle-900/60 border border-pickle-700/40 text-pickle-400 px-1.5 py-0.5 rounded-full font-bold leading-none">Next</span>` : ''}
-          ${resting && !isNext ? `<span class="text-[10px] bg-yellow-950 border border-yellow-800/60 text-yellow-500 px-1.5 py-0.5 rounded-full font-bold leading-none">&#x23F3; Resting</span>` : ''}
+          ${resting ? `<span class="text-[10px] bg-yellow-950 border border-yellow-800/60 text-yellow-500 px-1.5 py-0.5 rounded-full font-bold leading-none">&#x23F3; Resting</span>` : ''}
         </div>
         <div class="flex items-center gap-2 mt-0.5">${levelChip(p.skill_level)}</div>
       </div>
