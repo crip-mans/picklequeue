@@ -29,28 +29,34 @@ async function initClubContext() {
   if (stored?.clubId) currentClubId = stored.clubId;
 }
 
+// ── CLUB FILTER HELPER ────────────────────────────────────
+// When club_id is set, scope the query to that club.
+// When null (legacy data or session without club_id), fetch all rows so
+// the app still works before the data migration is run.
+function withClub(query) {
+  return currentClubId ? query.eq('club_id', currentClubId) : query;
+}
+
 // ── DATA FETCHERS ─────────────────────────────────────────
 async function fetchPlayers() {
-  if (!currentClubId) return;
-  const { data, error } = await db.from('players').select('*')
-    .eq('club_id', currentClubId)
-    .order('games_played', { ascending: true })
-    .order('created_at',   { ascending: true });
+  const { data, error } = await withClub(
+    db.from('players').select('*')
+      .order('games_played', { ascending: true })
+      .order('created_at',   { ascending: true })
+  );
   if (!error) players = data || [];
 }
 
 async function fetchCourts() {
-  if (!currentClubId) return;
-  const { data, error } = await db.from('courts').select('*')
-    .eq('club_id', currentClubId)
-    .eq('is_active', true).order('created_at', { ascending: true });
+  const { data, error } = await withClub(
+    db.from('courts').select('*').eq('is_active', true)
+      .order('created_at', { ascending: true })
+  );
   if (!error) courts = data || [];
 }
 
 async function fetchSettings() {
-  if (!currentClubId) return;
-  const { data, error } = await db.from('settings').select('*')
-    .eq('club_id', currentClubId);
+  const { data, error } = await withClub(db.from('settings').select('*'));
   if (!error && data) {
     data.forEach(row => {
       if (row.key === 'min_players') settings.min_players = parseInt(row.value) || 2;
@@ -229,19 +235,22 @@ async function requireSession() {
 // ── SETTINGS HELPER ───────────────────────────────────────
 // Safer than upsert — avoids needing a composite unique constraint.
 async function upsertSetting(key, value) {
-  const { data } = await db.from('settings').select('id')
-    .eq('key', key).eq('club_id', currentClubId).maybeSingle();
+  const { data } = await withClub(
+    db.from('settings').select('id').eq('key', key)
+  ).maybeSingle();
   if (data) {
-    await db.from('settings').update({ value }).eq('key', key).eq('club_id', currentClubId);
+    await withClub(db.from('settings').update({ value }).eq('key', key));
   } else {
-    await db.from('settings').insert({ key, value, club_id: currentClubId });
+    const row = { key, value };
+    if (currentClubId) row.club_id = currentClubId;
+    await db.from('settings').insert(row);
   }
 }
 
 // ── AUTO-MATCH ALGORITHM ──────────────────────────────────
 async function autoMatch(silent = false) {
-  const { data: freshPlayers, error: pe } = await db.from('players').select('*').eq('club_id', currentClubId);
-  const { data: freshCourts, error: ce } = await db.from('courts').select('*').eq('is_active', true).eq('club_id', currentClubId);
+  const { data: freshPlayers, error: pe } = await withClub(db.from('players').select('*'));
+  const { data: freshCourts, error: ce } = await withClub(db.from('courts').select('*').eq('is_active', true));
   
   if (pe || ce) {
     if (!silent) toast('Auto-match error: could not read database.', 'error');
@@ -258,12 +267,9 @@ async function autoMatch(silent = false) {
   const activeCourtCount = freshCourts.length || 1;
   let assignmentCycle = 0;
 
-  const { data: cycleRow } = await db
-    .from('settings')
-    .select('value')
-    .eq('key', 'assignment_cycle')
-    .eq('club_id', currentClubId)
-    .maybeSingle();
+  const { data: cycleRow } = await withClub(
+    db.from('settings').select('value').eq('key', 'assignment_cycle')
+  ).maybeSingle();
 
   if (cycleRow) {
     assignmentCycle = parseInt(cycleRow.value || 0);
