@@ -15,7 +15,7 @@ const db = supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON);
 // ── SHARED STATE ──────────────────────────────────────────
 let players          = [];
 let courts           = [];
-let settings         = { min_players: 2, max_players: 30, assignment_cycle: 0 };
+let settings         = { min_players: 12, max_players: 0, assignment_cycle: 0 }; // max 0 = no limit
 let assignmentCounter = 0;  // kept in sync with settings.assignment_cycle
 let currentClubId    = null; // set at login (admin) or session join (player)
 
@@ -59,8 +59,8 @@ async function fetchSettings() {
   const { data, error } = await withClub(db.from('settings').select('*'));
   if (!error && data) {
     data.forEach(row => {
-      if (row.key === 'min_players') settings.min_players = parseInt(row.value) || 2;
-      if (row.key === 'max_players') settings.max_players = parseInt(row.value) || 30;
+      if (row.key === 'min_players') settings.min_players = parseInt(row.value) || 12;
+      if (row.key === 'max_players') settings.max_players = parseInt(row.value) ?? 0; // 0 = no limit
       if (row.key === 'assignment_cycle') {
         settings.assignment_cycle = parseInt(row.value) || 0;
         assignmentCounter = settings.assignment_cycle;

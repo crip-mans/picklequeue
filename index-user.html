@@ -100,11 +100,38 @@
     <div id="queue-status-pill" class="ml-auto hidden shrink-0">
       <span id="queue-status-text" class="text-xs px-2 sm:px-3 py-1 rounded-full border font-medium whitespace-nowrap"></span>
     </div>
-    <!-- leave button removed — Log Out is in bottom nav -->
+
+    <!-- Desktop nav — hidden on mobile (bottom nav handles it there) -->
+    <div class="hidden lg:flex items-center gap-1 ml-2 shrink-0">
+      <button id="nav-home-desk" onclick="showTab('home')"
+        class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors text-pickle-400 bg-pickle-900/30">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+        </svg>
+        Home
+      </button>
+      <button id="nav-ranking-desk" onclick="showTab('ranking')"
+        class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors text-green-600 hover:text-green-400">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+        </svg>
+        Rankings
+      </button>
+      <button onclick="leaveSession()"
+        class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors text-green-700 hover:text-red-400 hover:bg-red-950/30">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+        </svg>
+        Log Out
+      </button>
+    </div>
   </div>
 </header>
 
-<main id="home-view" class="max-w-5xl mx-auto px-3 sm:px-4 py-4 sm:py-6 pb-24 flex flex-col gap-4 sm:gap-6">
+<main id="home-view" class="max-w-5xl mx-auto px-3 sm:px-4 py-4 sm:py-6 pb-24 lg:pb-6 flex flex-col gap-4 sm:gap-6">
 
   <!-- ══════════════════════════════════════════════
        JOIN FORM
@@ -217,7 +244,7 @@
 <!-- ══════════════════════════════════════════════
      RANKING VIEW (hidden until tab selected)
 ══════════════════════════════════════════════ -->
-<div id="ranking-view" class="hidden max-w-5xl mx-auto px-3 sm:px-4 py-4 sm:py-6 pb-24">
+<div id="ranking-view" class="hidden max-w-5xl mx-auto px-3 sm:px-4 py-4 sm:py-6 pb-24 lg:pb-6">
 
   <!-- Header -->
   <div class="flex items-center gap-3 mb-4">
@@ -239,7 +266,7 @@
 <!-- ══════════════════════════════════════════════
      BOTTOM NAVIGATION
 ══════════════════════════════════════════════ -->
-<nav class="fixed bottom-0 left-0 right-0 z-40 bg-ink/95 backdrop-blur-sm border-t border-green-900/50"
+<nav class="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-ink/95 backdrop-blur-sm border-t border-green-900/50"
      style="padding-bottom: env(safe-area-inset-bottom)">
   <div class="max-w-5xl mx-auto grid grid-cols-3">
 
@@ -366,10 +393,27 @@ function showTab(tab) {
   document.getElementById('home-view').classList.toggle('hidden', tab !== 'home');
   document.getElementById('ranking-view').classList.toggle('hidden', tab !== 'ranking');
 
-  const activeClass   = 'text-pickle-400';
-  const inactiveClass = 'text-green-700';
-  document.getElementById('nav-home').className    = document.getElementById('nav-home').className.replace(tab === 'home'    ? inactiveClass : activeClass, tab === 'home'    ? activeClass : inactiveClass);
-  document.getElementById('nav-ranking').className = document.getElementById('nav-ranking').className.replace(tab === 'ranking' ? inactiveClass : activeClass, tab === 'ranking' ? activeClass : inactiveClass);
+  // Mobile bottom nav
+  const setMobileNav = (id, active) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.className = el.className
+      .replace('text-pickle-400', active ? 'text-pickle-400' : 'text-green-700')
+      .replace('text-green-700',  active ? 'text-pickle-400' : 'text-green-700');
+  };
+  setMobileNav('nav-home',    tab === 'home');
+  setMobileNav('nav-ranking', tab === 'ranking');
+
+  // Desktop header nav
+  const activeDesk   = 'text-pickle-400 bg-pickle-900/30';
+  const inactiveDesk = 'text-green-600 hover:text-green-400';
+  ['home', 'ranking'].forEach(t => {
+    const el = document.getElementById('nav-' + t + '-desk');
+    if (!el) return;
+    const isActive = t === tab;
+    el.className = el.className
+      .replace(isActive ? inactiveDesk : activeDesk, isActive ? activeDesk : inactiveDesk);
+  });
 
   if (tab === 'ranking') renderRanking();
 }
@@ -450,7 +494,7 @@ function renderRanking() {
 // ══════════════════════════════════════════════════════
 function renderQueueStatus() {
   const total  = players.length;
-  const max    = settings.max_players;
+  const max    = settings.max_players; // 0 = no limit
   const pill   = document.getElementById('queue-status-pill');
   const text   = document.getElementById('queue-status-text');
   const notice = document.getElementById('queue-full-notice');
@@ -458,9 +502,9 @@ function renderQueueStatus() {
   const btn    = document.getElementById('register-btn');
 
   pill.classList.remove('hidden');
-  const isFull = total >= max;
-  text.textContent = total + ' / ' + max + ' players';
-  text.className = 'text-xs px-3 py-1 rounded-full border font-medium ' +
+  const isFull = max > 0 && total >= max;
+  text.textContent = max > 0 ? total + ' / ' + max + ' players' : total + ' players';
+  text.className = 'text-xs px-2 sm:px-3 py-1 rounded-full border font-medium ' +
     (isFull ? 'bg-yellow-950/60 border-yellow-800/50 text-yellow-300'
              : 'bg-green-950 border-green-900 text-green-500');
 
@@ -631,8 +675,8 @@ async function registerPlayer() {
     return;
   }
 
-  // Queue cap check
-  if (players.length >= settings.max_players) {
+  // Queue cap check (only when admin has set a limit)
+  if (settings.max_players > 0 && players.length >= settings.max_players) {
     toast('Queue is full! Max ' + settings.max_players + ' players reached.', 'warn');
     return;
   }

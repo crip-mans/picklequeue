@@ -226,7 +226,7 @@
             <label class="block text-xs text-green-600 mb-1.5 font-medium uppercase tracking-wide">Min Players</label>
             <div class="flex items-center gap-1">
               <button onclick="adjustLimit('min',-1)" class="w-8 h-8 rounded-lg bg-ink border border-green-900 text-green-400 hover:bg-green-950 transition-colors text-lg leading-none flex items-center justify-center">&#x2212;</button>
-              <input id="min-players-input" type="number" min="1" max="100" value="2"
+              <input id="min-players-input" type="number" min="1" max="100" value="12"
                 class="input-glow flex-1 min-w-0 bg-ink border border-green-900 rounded-lg px-2 py-1.5 text-green-100 text-sm text-center"
                 onchange="saveLimit('min',this.value)" />
               <button onclick="adjustLimit('min',1)"  class="w-8 h-8 rounded-lg bg-ink border border-green-900 text-green-400 hover:bg-green-950 transition-colors text-lg leading-none flex items-center justify-center">&#x2B;</button>
@@ -238,12 +238,12 @@
             <label class="block text-xs text-green-600 mb-1.5 font-medium uppercase tracking-wide">Max Players</label>
             <div class="flex items-center gap-1">
               <button onclick="adjustLimit('max',-1)" class="w-8 h-8 rounded-lg bg-ink border border-green-900 text-green-400 hover:bg-green-950 transition-colors text-lg leading-none flex items-center justify-center">&#x2212;</button>
-              <input id="max-players-input" type="number" min="1" max="500" value="30"
+              <input id="max-players-input" type="number" min="0" max="500" value="0"
                 class="input-glow flex-1 min-w-0 bg-ink border border-green-900 rounded-lg px-2 py-1.5 text-green-100 text-sm text-center"
                 onchange="saveLimit('max',this.value)" />
               <button onclick="adjustLimit('max',1)"  class="w-8 h-8 rounded-lg bg-ink border border-green-900 text-green-400 hover:bg-green-950 transition-colors text-lg leading-none flex items-center justify-center">&#x2B;</button>
             </div>
-            <p class="text-green-800 text-xs mt-1">Max before queue locks</p>
+            <p class="text-green-800 text-xs mt-1">0 = no limit</p>
           </div>
         </div>
         <div id="limits-summary" class="bg-ink/40 border border-green-900/40 rounded-xl px-3 py-2 text-xs text-green-600"></div>
@@ -596,19 +596,21 @@ function renderLimitsSummary() {
   const total   = players.length;
   const waiting = players.filter(p => p.status === 'waiting').length;
   const resting = players.filter(p => p.status === 'waiting' && isResting(p)).length;
-  const pct     = settings.max_players > 0 ? Math.round((total / settings.max_players) * 100) : 0;
+  const hasMax  = settings.max_players > 0;
+  const pct     = hasMax ? Math.round((total / settings.max_players) * 100) : 0;
   const win     = restWindowSize();
   const el      = document.getElementById('limits-summary');
 
   let statusColor = 'text-green-600', statusMsg = 'Queue open';
-  if (total >= settings.max_players)     { statusColor = 'text-yellow-400'; statusMsg = 'Queue FULL'; }
-  else if (total < settings.min_players) { statusColor = 'text-green-700';  statusMsg = 'Below minimum'; }
+  if (hasMax && total >= settings.max_players) { statusColor = 'text-yellow-400'; statusMsg = 'Queue FULL'; }
+  else if (total < settings.min_players)        { statusColor = 'text-green-700';  statusMsg = 'Below minimum'; }
 
   el.innerHTML = `
     <div class="flex justify-between mb-1.5 flex-wrap gap-1">
       <span>${total} registered &middot; ${waiting} waiting &middot; <span class="text-yellow-600">${resting} resting</span></span>
       <span class="${statusColor} font-semibold">${statusMsg}</span>
     </div>
+    ${hasMax ? `
     <div class="w-full bg-green-950 rounded-full h-1.5 overflow-hidden mb-1">
       <div class="h-full rounded-full transition-all ${total >= settings.max_players ? 'bg-yellow-500' : 'bg-pickle-500'}"
            style="width:${Math.min(pct,100)}%"></div>
@@ -617,7 +619,11 @@ function renderLimitsSummary() {
       <span>Min: ${settings.min_players}</span>
       <span>${pct}% full</span>
       <span>Max: ${settings.max_players}</span>
-    </div>
+    </div>` : `
+    <div class="flex justify-between text-green-800">
+      <span>Min: ${settings.min_players}</span>
+      <span class="text-green-600 font-medium">No player limit set</span>
+    </div>`}
     <div class="mt-1.5 text-green-800">
       Rest window: <span class="text-green-600">${win} assignment${win!==1?'s':''}</span>
       <span class="text-green-900">(= active courts)</span>
@@ -636,15 +642,18 @@ function saveLimit(type, raw) {
   clearTimeout(limitTimer);
   limitTimer = setTimeout(async () => {
     const val = parseInt(raw);
-    if (isNaN(val) || val < 1) return;
+    if (isNaN(val) || val < 0) return;
 
     if (type === 'min') {
-      const max = parseInt(document.getElementById('max-players-input').value) || settings.max_players;
-      if (val > max) { toast('Min cannot exceed Max.', 'warn'); document.getElementById('min-players-input').value = settings.min_players; return; }
+      if (val < 1) { toast('Minimum must be at least 1.', 'warn'); document.getElementById('min-players-input').value = settings.min_players; return; }
       settings.min_players = val;
     } else {
-      const min = parseInt(document.getElementById('min-players-input').value) || settings.min_players;
-      if (val < min) { toast('Max cannot be below Min.', 'warn'); document.getElementById('max-players-input').value = settings.max_players; return; }
+      // 0 = no limit; otherwise must be >= min
+      if (val > 0 && val < settings.min_players) {
+        toast('Max cannot be below Min (' + settings.min_players + ').', 'warn');
+        document.getElementById('max-players-input').value = settings.max_players;
+        return;
+      }
       settings.max_players = val;
     }
 
