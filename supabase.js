@@ -423,16 +423,73 @@ function setLoading(id, on) {
 
 function toast(msg, type) {
   type = type || 'success';
-  const colors = {
-    success: 'bg-pickle-900 border-pickle-700 text-pickle-300',
-    warn:    'bg-yellow-950 border-yellow-800 text-yellow-300',
-    error:   'bg-red-950  border-red-800    text-red-300',
+  const cfg = {
+    success: { icon: '✓', accent: '#22c544', bg: 'rgba(13,40,18,0.97)', border: 'rgba(34,197,68,0.35)',  text: '#86ef9a', iconBg: 'rgba(34,197,68,0.15)',  label: 'Success' },
+    warn:    { icon: '⚠', accent: '#eab308', bg: 'rgba(30,22,4,0.97)',  border: 'rgba(234,179,8,0.35)',  text: '#fde047', iconBg: 'rgba(234,179,8,0.15)',  label: 'Notice'  },
+    error:   { icon: '✕', accent: '#ef4444', bg: 'rgba(30,8,8,0.97)',   border: 'rgba(239,68,68,0.35)',  text: '#fca5a5', iconBg: 'rgba(239,68,68,0.15)',  label: 'Error'   },
   };
+  const c = cfg[type] || cfg.success;
+
   const el = document.createElement('div');
-  el.className = 'toast pointer-events-auto border rounded-xl px-4 py-2.5 text-sm font-medium shadow-xl ' + (colors[type] || colors.success);
-  el.innerHTML = msg;
+  el.setAttribute('role', 'alert');
+  el.style.cssText = `
+    pointer-events:auto; display:flex; align-items:flex-start; gap:10px;
+    padding:12px 12px 14px 12px; border-radius:14px;
+    border:1px solid ${c.border}; background:${c.bg};
+    backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px);
+    box-shadow:0 12px 40px rgba(0,0,0,0.5),0 2px 8px rgba(0,0,0,0.3),inset 0 1px 0 rgba(255,255,255,0.04);
+    max-width:300px; min-width:220px; position:relative; overflow:hidden;
+    animation:toast-in .38s cubic-bezier(.34,1.56,.64,1) forwards;
+  `;
+
+  const iconEl = document.createElement('div');
+  iconEl.style.cssText = `
+    width:30px; height:30px; border-radius:8px; flex-shrink:0;
+    background:${c.iconBg}; color:${c.accent};
+    display:flex; align-items:center; justify-content:center;
+    font-size:14px; font-weight:900; margin-top:1px;
+  `;
+  iconEl.textContent = c.icon;
+
+  const body = document.createElement('div');
+  body.style.cssText = 'flex:1; min-width:0; padding-top:2px;';
+  body.innerHTML = `
+    <div style="font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:${c.accent};opacity:.8;margin-bottom:2px;">${c.label}</div>
+    <div style="font-size:13px;font-weight:500;color:${c.text};line-height:1.45;">${msg}</div>
+  `;
+
+  const closeBtn = document.createElement('button');
+  closeBtn.textContent = '×';
+  closeBtn.style.cssText = `
+    flex-shrink:0; background:none; border:none; cursor:pointer; padding:2px 2px 0 0;
+    font-size:18px; line-height:1; color:rgba(255,255,255,0.25); transition:color .15s;
+  `;
+  closeBtn.onmouseenter = () => { closeBtn.style.color = 'rgba(255,255,255,0.7)'; };
+  closeBtn.onmouseleave = () => { closeBtn.style.color = 'rgba(255,255,255,0.25)'; };
+
+  const bar = document.createElement('div');
+  bar.style.cssText = `
+    position:absolute; bottom:0; left:0; height:3px;
+    background:${c.accent}; opacity:0.5; border-radius:0 0 0 14px;
+    animation:toast-bar 3.5s linear forwards;
+  `;
+
+  el.appendChild(iconEl);
+  el.appendChild(body);
+  el.appendChild(closeBtn);
+  el.appendChild(bar);
+
   const container = document.getElementById('toast-container');
-  if (container) { container.appendChild(el); setTimeout(() => el.remove(), 3500); }
+  if (!container) return;
+  container.appendChild(el);
+
+  const dismiss = () => {
+    clearTimeout(timer);
+    el.style.animation = 'toast-out .28s ease forwards';
+    setTimeout(() => el.remove(), 280);
+  };
+  closeBtn.addEventListener('click', dismiss);
+  const timer = setTimeout(dismiss, 3500);
 }
 
 // Shared CSS injected into <head> by each page on load
@@ -456,8 +513,9 @@ function injectSharedStyles() {
     }
     @keyframes pulse-dot { 0%,100%{opacity:1} 50%{opacity:.4} }
     .live-dot { animation: pulse-dot 1.5s ease-in-out infinite; }
-    @keyframes slide-up { from{transform:translateY(20px);opacity:0} to{transform:translateY(0);opacity:1} }
-    .toast { animation: slide-up 0.3s ease; }
+    @keyframes toast-in  { from{transform:translateX(110%) scale(.92);opacity:0} to{transform:translateX(0) scale(1);opacity:1} }
+    @keyframes toast-out { from{transform:translateX(0);opacity:1;max-height:120px;margin-bottom:0} to{transform:translateX(110%);opacity:0;max-height:0;margin-bottom:-8px} }
+    @keyframes toast-bar { from{width:100%} to{width:0%} }
     .waitlist-row:hover { background: rgba(34,197,68,0.06); }
     ::-webkit-scrollbar { width: 6px; }
     ::-webkit-scrollbar-track { background: #0d1a0d; }
