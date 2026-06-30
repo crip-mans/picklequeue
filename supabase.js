@@ -19,6 +19,10 @@ let settings         = { min_players: 12, max_players: 0, assignment_cycle: 0 };
 let assignmentCounter = 0;  // kept in sync with settings.assignment_cycle
 let currentClubId    = null; // set at login (admin) or session join (player)
 
+// Pair history: "sortedId1:sortedId2" → number of times those two were teammates.
+// Loaded from DB on init, persisted after each court assignment.
+let pairHistory = {};
+
 // ── CLUB CONTEXT ──────────────────────────────────────────
 // Admin path: resolves from Supabase auth user id.
 // Player path: resolves from the stored session (set in requireSession).
@@ -64,6 +68,9 @@ async function fetchSettings() {
       if (row.key === 'assignment_cycle') {
         settings.assignment_cycle = parseInt(row.value) || 0;
         assignmentCounter = settings.assignment_cycle;
+      }
+      if (row.key === 'pair_history') {
+        try { pairHistory = JSON.parse(row.value) || {}; } catch { pairHistory = {}; }
       }
     });
   }
@@ -336,10 +343,49 @@ async function autoMatch(silent = false) {
   return true;
 }
 
+// ── PAIR HISTORY HELPERS ──────────────────────────────────
+// Canonical key for any two player IDs (order-independent).
+function pairKey(a, b) { return [a, b].sort().join(':'); }
+
+function getPairCount(a, b) { return pairHistory[pairKey(a, b)] || 0; }
+
+// Given 4 player IDs, return the split [[teamA_id1, teamA_id2], [teamB_id1, teamB_id2]]
+// that minimises the maximum number of times either pair has played together.
+function getBestPairing(ids) {
+  const combos = [
+    [[ids[0], ids[1]], [ids[2], ids[3]]],
+    [[ids[0], ids[2]], [ids[1], ids[3]]],
+    [[ids[0], ids[3]], [ids[1], ids[2]]],
+  ];
+  const score = ([a, b]) =>
+    Math.max(getPairCount(a[0], a[1]), getPairCount(b[0], b[1])) * 1000
+    + getPairCount(a[0], a[1]) + getPairCount(b[0], b[1]);
+  return combos.reduce((best, c) => score(c) < score(best) ? c : best, combos[0]);
+}
+
+async function resetPairHistory() {
+  pairHistory = {};
+  await upsertSetting('pair_history', '{}');
+}
+
 async function assignPlayersToCourt(courtId, playerIds, assignmentCycle) {
+  // Determine the teammate split that avoids over-repeating the same pairs.
+  let orderedIds = playerIds;
+  if (playerIds.length === 4) {
+    const [teamA, teamB] = getBestPairing(playerIds);
+    orderedIds = [...teamA, ...teamB];
+    // Record this pairing in history
+    const kA = pairKey(teamA[0], teamA[1]);
+    const kB = pairKey(teamB[0], teamB[1]);
+    pairHistory[kA] = (pairHistory[kA] || 0) + 1;
+    pairHistory[kB] = (pairHistory[kB] || 0) + 1;
+    // Persist asynchronously — don't block court assignment on a settings write
+    upsertSetting('pair_history', JSON.stringify(pairHistory));
+  }
+
   const { error: ce } = await db
     .from('courts')
-    .update({ player_ids: playerIds })
+    .update({ player_ids: orderedIds })
     .eq('id', courtId);
 
   if (ce) {

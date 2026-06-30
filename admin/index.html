@@ -846,6 +846,7 @@ async function clearAllPlayers() {
   if (courts.length) await db.from('courts').update({ player_ids: [] }).eq('is_active', true);
   const { error } = await db.from('players').delete().in('id', players.map(p => p.id));
   if (error) { toast('Error clearing players.', 'error'); return; }
+  await resetPairHistory(); // new session — start fresh pairing history
   toast('All players cleared.', 'success');
 }
 
