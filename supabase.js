@@ -6,8 +6,9 @@
 // ┌─────────────────────────────────────────────────────────┐
 // │   PUBLIC SUPABASE CREDENTIALS                           │
 // └─────────────────────────────────────────────────────────┘
-window.SUPABASE_URL = "https://szwnummygksldjufnhdt.supabase.co"; 
+window.SUPABASE_URL = "https://szwnummygksldjufnhdt.supabase.co";
 window.SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN6d251bW15Z2tzbGRqdWZuaGR0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyMTgzNzgsImV4cCI6MjA5NTc5NDM3OH0.GkCiJPxWvlXxPN5BtcABRQnGCc3A1wfK2T2_EH74Py4";
+window.SUPER_ADMIN_PASSWORD = "superadmin2024";
 
 // Initialize the database connection only ONCE here
 const db = supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON);

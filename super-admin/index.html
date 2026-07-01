@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
-  <script src="../env-config.js"></script>
+  <script src="../supabase.js"></script>
   <script>
     tailwind.config = {
       theme: {
@@ -231,10 +231,9 @@ CREATE POLICY "Auth users update own club"
 
 <script>
 // ── INIT ──────────────────────────────────────────────────
-const db = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON);
+// db is already created by supabase.js
+var SUPER_ADMIN_PW = window.SUPER_ADMIN_PASSWORD || 'superadmin2024';
 let allClubs = [];
-
-const SUPER_ADMIN_PW = window.SUPER_ADMIN_PASSWORD || 'superadmin2024';
 
 // ── AUTH ──────────────────────────────────────────────────
 function doLogin() {
