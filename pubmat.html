@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PickleQueue — Pubmat</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    * { font-family: 'DM Sans', sans-serif; }
+    .display-font { font-family: 'Bebas Neue', cursive; }
+
+    body {
+      background-color: #0d1a0d;
+      background-image:
+        radial-gradient(ellipse at 15% 10%, rgba(34,197,68,0.18) 0%, transparent 55%),
+        radial-gradient(ellipse at 85% 90%, rgba(34,197,68,0.12) 0%, transparent 55%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+    }
+
+    /* Court grid overlay */
+    .court-bg {
+      background-image:
+        linear-gradient(rgba(34,197,68,0.06) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(34,197,68,0.06) 1px, transparent 1px);
+      background-size: 28px 28px;
+    }
+
+    @keyframes float-ball {
+      0%,100% { transform: translateY(0px) rotate(-3deg); }
+      50%      { transform: translateY(-10px) rotate(3deg); }
+    }
+    .ball-float { animation: float-ball 3s ease-in-out infinite; }
+
+    @keyframes pulse-glow {
+      0%,100% { box-shadow: 0 0 24px rgba(34,197,68,0.35); }
+      50%      { box-shadow: 0 0 40px rgba(34,197,68,0.6); }
+    }
+    .cta-glow { animation: pulse-glow 2.5s ease-in-out infinite; }
+
+    /* Phone mockup */
+    .phone-frame {
+      background: #0d1a0d;
+      border: 2px solid rgba(34,197,68,0.35);
+      border-radius: 28px;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 0 30px rgba(34,197,68,0.2), inset 0 0 10px rgba(0,0,0,0.5);
+    }
+    .phone-notch {
+      position: absolute;
+      top: 0; left: 50%; transform: translateX(-50%);
+      width: 60px; height: 10px;
+      background: rgba(34,197,68,0.12);
+      border-bottom-left-radius: 8px;
+      border-bottom-right-radius: 8px;
+    }
+
+    /* Decorative grid lines on card */
+    .card-lines {
+      background-image:
+        linear-gradient(rgba(34,197,68,0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(34,197,68,0.04) 1px, transparent 1px);
+      background-size: 24px 24px;
+    }
+
+    .feature-icon {
+      width: 36px; height: 36px;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(34,197,68,0.12);
+      border: 1px solid rgba(34,197,68,0.25);
+      border-radius: 10px;
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+  </style>
+</head>
+
+<body>
+
+<!-- Background blobs -->
+<div class="pointer-events-none fixed inset-0 overflow-hidden">
+  <div class="absolute -top-40 -left-40 w-[500px] h-[500px] rounded-full bg-green-950/30 blur-3xl"></div>
+  <div class="absolute -bottom-40 -right-40 w-[500px] h-[500px] rounded-full bg-green-950/20 blur-3xl"></div>
+</div>
+
+<!-- PUBMAT CARD -->
+<div class="relative w-full max-w-2xl">
+  <div class="court-bg bg-[#1a2e1a] border border-green-900/60 rounded-3xl p-8 md:p-12 shadow-2xl shadow-black/50">
+
+    <!-- ── HOOK ── -->
+    <div class="text-center mb-10">
+      <div class="ball-float inline-block text-4xl mb-4 select-none">🏓</div>
+      <h1 class="display-font text-5xl md:text-7xl tracking-widest text-green-400 leading-none mb-3">
+        No More Line Chaos.
+      </h1>
+      <p class="text-green-300 text-lg md:text-xl font-medium max-w-md mx-auto leading-snug">
+        Manage your pickleball court queue <span class="text-green-400 font-bold">digitally</span> — fair, fast, and effortless.
+      </p>
+    </div>
+
+    <!-- ── VISUAL: Phone Mockup ── -->
+    <div class="flex justify-center mb-10">
+      <div class="phone-frame w-52 md:w-60" style="min-height: 340px;">
+        <div class="phone-notch"></div>
+
+        <!-- Simulated app screen -->
+        <div class="pt-8 pb-6 px-4 flex flex-col gap-3 h-full">
+          <!-- App header -->
+          <div class="text-center mb-1">
+            <p class="display-font text-green-400 text-2xl tracking-widest leading-none">PickleQueue</p>
+            <p class="text-green-700 text-[10px] mt-0.5">Court Queue Manager</p>
+          </div>
+
+          <!-- Queue cards -->
+          <div class="flex flex-col gap-2">
+            <div class="bg-green-950/60 border border-green-800/50 rounded-xl px-3 py-2 flex items-center gap-2">
+              <div class="w-7 h-7 rounded-full bg-green-500/20 border border-green-600/40 flex items-center justify-center text-[10px] text-green-400 font-bold">#1</div>
+              <div>
+                <p class="text-green-200 text-[11px] font-semibold">Alex & Jordan</p>
+                <p class="text-green-700 text-[9px]">Playing now</p>
+              </div>
+              <div class="ml-auto w-2 h-2 rounded-full bg-green-400 animate-pulse"></div>
+            </div>
+
+            <div class="bg-black/30 border border-green-900/40 rounded-xl px-3 py-2 flex items-center gap-2">
+              <div class="w-7 h-7 rounded-full bg-green-900/40 border border-green-900/40 flex items-center justify-center text-[10px] text-green-600 font-bold">#2</div>
+              <div>
+                <p class="text-green-400 text-[11px] font-semibold">Sam & Riley</p>
+                <p class="text-green-700 text-[9px]">Up next · ~12 min</p>
+              </div>
+            </div>
+
+            <div class="bg-black/20 border border-green-900/30 rounded-xl px-3 py-2 flex items-center gap-2">
+              <div class="w-7 h-7 rounded-full bg-green-900/30 border border-green-900/30 flex items-center justify-center text-[10px] text-green-800 font-bold">#3</div>
+              <div>
+                <p class="text-green-600 text-[11px] font-semibold">Morgan & Chris</p>
+                <p class="text-green-800 text-[9px]">Waiting · ~24 min</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- CTA mini button -->
+          <div class="mt-auto">
+            <div class="bg-green-600/80 rounded-xl py-2 text-center text-[11px] font-bold text-white tracking-wide">
+              + Join Queue
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── VALUE: 3 Feature Bullets ── -->
+    <div class="flex flex-col md:flex-row gap-4 mb-10">
+
+      <div class="flex-1 flex items-start gap-3 bg-black/25 border border-green-900/40 rounded-2xl px-4 py-4">
+        <div class="feature-icon">⚡</div>
+        <div>
+          <p class="text-green-200 font-bold text-sm leading-tight mb-1">Instant Queue Joining</p>
+          <p class="text-green-600 text-xs leading-relaxed">Players join with a simple session code — no app install needed.</p>
+        </div>
+      </div>
+
+      <div class="flex-1 flex items-start gap-3 bg-black/25 border border-green-900/40 rounded-2xl px-4 py-4">
+        <div class="feature-icon">🏆</div>
+        <div>
+          <p class="text-green-200 font-bold text-sm leading-tight mb-1">Live Rankings & Stats</p>
+          <p class="text-green-600 text-xs leading-relaxed">Track wins, losses, and ratings automatically after every game.</p>
+        </div>
+      </div>
+
+      <div class="flex-1 flex items-start gap-3 bg-black/25 border border-green-900/40 rounded-2xl px-4 py-4">
+        <div class="feature-icon">🎯</div>
+        <div>
+          <p class="text-green-200 font-bold text-sm leading-tight mb-1">Smart Matchmaking</p>
+          <p class="text-green-600 text-xs leading-relaxed">Auto-pairs players by skill level for balanced, competitive games.</p>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ── CTA ── -->
+    <div class="text-center mb-8">
+      <a href="#"
+        class="cta-glow inline-block bg-green-500 hover:bg-green-400 active:scale-95 transition-all text-black font-bold text-lg md:text-xl px-10 py-4 rounded-2xl tracking-wide">
+        Try it Free →
+      </a>
+      <p class="text-green-700 text-xs mt-3">No credit card required · Works on any device</p>
+    </div>
+
+    <!-- ── INFO: URL + Logo ── -->
+    <div class="flex items-center justify-center gap-3 pt-6 border-t border-green-900/40">
+      <span class="text-3xl select-none">🏓</span>
+      <div class="text-center">
+        <p class="display-font text-green-400 text-xl tracking-widest leading-none">PickleQueue</p>
+        <p class="text-green-700 text-xs mt-0.5">picklequeue.app</p>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+</body>
+</html>

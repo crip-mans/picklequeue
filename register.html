@@ -266,6 +266,15 @@ async function createAccount() {
       // This is the "confirmation email sent" state — still a success
     }
 
+    // Record club in clubs table for super admin visibility
+    if (data?.user?.id) {
+      await db.from('clubs').upsert({
+        user_id: data.user.id,
+        club_name: clubName,
+        email: email,
+      }, { onConflict: 'user_id' });
+    }
+
     // Success — show confirmation panel
     document.getElementById('register-form').classList.add('hidden');
     document.getElementById('success-panel').classList.remove('hidden');

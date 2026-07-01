@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PickleQueue — Super Admin</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="../env-config.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { display:['Bebas Neue','cursive'], body:['DM Sans','sans-serif'] },
+          colors: {
+            pickle:{ 50:'#f0fdf0',100:'#dcfce0',200:'#bbf7c4',300:'#86ef9a',400:'#4ade68',
+                     500:'#22c544',600:'#16a336',700:'#15802d',800:'#166528',900:'#145323' },
+            court:'#1a2e1a', ink:'#0d1a0d',
+          },
+        },
+      },
+    };
+  </script>
+  <style>
+    * { font-family: 'DM Sans', sans-serif; }
+    .display-font { font-family: 'Bebas Neue', cursive; }
+
+    body {
+      background-color: #0d1a0d;
+      background-image:
+        radial-gradient(ellipse at 20% 10%, rgba(34,197,68,0.12) 0%, transparent 55%),
+        radial-gradient(ellipse at 80% 90%, rgba(34,197,68,0.08) 0%, transparent 55%);
+      min-height: 100vh;
+    }
+
+    .court-bg {
+      background-image:
+        linear-gradient(rgba(34,197,68,0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(34,197,68,0.04) 1px, transparent 1px);
+      background-size: 28px 28px;
+    }
+
+    .input-glow:focus {
+      outline: none;
+      box-shadow: 0 0 0 2px rgba(34,197,68,0.45);
+    }
+
+    .spinner {
+      border: 2px solid rgba(34,197,68,0.2);
+      border-top-color: #22c544;
+      border-radius: 50%;
+      width: 18px; height: 18px;
+      animation: spin .6s linear infinite;
+      display: inline-block; vertical-align: middle;
+    }
+    @keyframes spin { to { transform: rotate(360deg) } }
+
+    @keyframes slide-up {
+      from { transform: translateY(16px); opacity: 0; }
+      to   { transform: translateY(0);    opacity: 1; }
+    }
+    .slide-up { animation: slide-up 0.4s ease forwards; }
+
+    .stat-card { background: rgba(22,163,54,0.07); border: 1px solid rgba(34,197,68,0.15); }
+
+    tr:hover td { background: rgba(34,197,68,0.04); }
+
+    .badge-new {
+      background: rgba(34,197,68,0.15);
+      color: #4ade68;
+      border: 1px solid rgba(34,197,68,0.3);
+    }
+  </style>
+</head>
+
+<body class="text-green-100">
+
+<!-- ── LOGIN GATE ── -->
+<div id="login-gate" class="fixed inset-0 z-50 flex items-center justify-center bg-ink/95 backdrop-blur-sm p-4">
+  <div class="court-bg bg-court border border-green-900/70 rounded-2xl p-8 w-full max-w-sm shadow-2xl shadow-black/60 slide-up">
+    <div class="text-center mb-6">
+      <div class="text-4xl mb-2 select-none">🛡️</div>
+      <h1 class="display-font text-3xl text-pickle-400 tracking-widest">Super Admin</h1>
+      <p class="text-green-600 text-xs mt-1">PickleQueue platform access</p>
+    </div>
+
+    <div class="mb-4">
+      <label class="block text-xs text-green-600 uppercase tracking-wider font-semibold mb-1.5">Password</label>
+      <input id="sa-password" type="password" placeholder="Enter super admin password"
+        class="input-glow w-full bg-ink border border-green-900 rounded-xl px-4 py-3 text-green-100 text-sm placeholder-green-800 transition-all"
+        onkeydown="if(event.key==='Enter') doLogin()" />
+    </div>
+
+    <div id="login-error" class="hidden mb-4 bg-red-950/60 border border-red-900/50 rounded-xl px-4 py-2.5">
+      <p class="text-red-400 text-sm font-medium">Incorrect password.</p>
+    </div>
+
+    <button onclick="doLogin()"
+      class="w-full bg-pickle-600 hover:bg-pickle-500 active:scale-[0.98] text-white font-bold py-3 rounded-xl text-sm transition-all">
+      Login →
+    </button>
+  </div>
+</div>
+
+<!-- ── MAIN DASHBOARD (hidden until authenticated) ── -->
+<div id="dashboard" class="hidden min-h-screen">
+
+  <!-- Header -->
+  <header class="border-b border-green-900/50 bg-ink/80 backdrop-blur sticky top-0 z-40">
+    <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <span class="text-2xl select-none">🛡️</span>
+        <div>
+          <h1 class="display-font text-2xl text-pickle-400 leading-none tracking-widest">PickleQueue</h1>
+          <p class="text-green-700 text-xs">Super Admin Dashboard</p>
+        </div>
+      </div>
+      <button onclick="doLogout()"
+        class="text-green-700 hover:text-green-400 text-xs font-medium px-3 py-1.5 rounded-lg border border-green-900/50 hover:border-green-700/50 transition-all">
+        Logout
+      </button>
+    </div>
+  </header>
+
+  <main class="max-w-6xl mx-auto px-4 py-8">
+
+    <!-- Stats row -->
+    <div class="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-8">
+      <div class="stat-card rounded-xl p-4 slide-up">
+        <p class="text-green-700 text-xs font-semibold uppercase tracking-wider mb-1">Total Clubs</p>
+        <p id="stat-total" class="display-font text-4xl text-pickle-400">—</p>
+      </div>
+      <div class="stat-card rounded-xl p-4 slide-up" style="animation-delay:0.05s">
+        <p class="text-green-700 text-xs font-semibold uppercase tracking-wider mb-1">This Month</p>
+        <p id="stat-month" class="display-font text-4xl text-pickle-400">—</p>
+      </div>
+      <div class="stat-card rounded-xl p-4 slide-up col-span-2 sm:col-span-1" style="animation-delay:0.1s">
+        <p class="text-green-700 text-xs font-semibold uppercase tracking-wider mb-1">This Week</p>
+        <p id="stat-week" class="display-font text-4xl text-pickle-400">—</p>
+      </div>
+    </div>
+
+    <!-- Club sign-ups table -->
+    <div class="court-bg bg-court border border-green-900/60 rounded-2xl overflow-hidden shadow-xl slide-up" style="animation-delay:0.15s">
+
+      <!-- Table header -->
+      <div class="px-5 py-4 border-b border-green-900/50 flex items-center justify-between gap-3 flex-wrap">
+        <div>
+          <h2 class="display-font text-xl text-green-200 tracking-wider">Club Sign-ups</h2>
+          <p class="text-green-700 text-xs mt-0.5">All registered clubs on the platform</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <input id="search-input" type="text" placeholder="Search clubs…"
+            oninput="filterTable()"
+            class="input-glow bg-ink border border-green-900 rounded-xl px-3 py-2 text-green-100 text-xs placeholder-green-800 transition-all w-40" />
+          <button onclick="loadClubs()"
+            class="bg-green-900/50 hover:bg-green-900 border border-green-800/50 text-green-400 text-xs font-medium px-3 py-2 rounded-xl transition-all">
+            ↻ Refresh
+          </button>
+        </div>
+      </div>
+
+      <!-- Loading state -->
+      <div id="table-loading" class="py-12 text-center">
+        <div class="spinner mx-auto mb-3"></div>
+        <p class="text-green-700 text-sm">Loading clubs…</p>
+      </div>
+
+      <!-- Empty state -->
+      <div id="table-empty" class="hidden py-12 text-center">
+        <div class="text-4xl mb-3">🏓</div>
+        <p class="text-green-500 font-medium">No clubs registered yet</p>
+        <p class="text-green-800 text-sm mt-1">Clubs will appear here after they sign up.</p>
+      </div>
+
+      <!-- Error state -->
+      <div id="table-error" class="hidden py-10 text-center">
+        <div class="text-3xl mb-2">⚠️</div>
+        <p class="text-red-400 text-sm font-medium" id="table-error-msg">Failed to load clubs.</p>
+        <p class="text-green-800 text-xs mt-1">Make sure the <code class="text-green-600">clubs</code> table exists in Supabase.</p>
+      </div>
+
+      <!-- Table -->
+      <div id="table-wrap" class="hidden overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-green-900/40">
+              <th class="text-left text-xs text-green-700 uppercase tracking-wider font-semibold px-5 py-3">#</th>
+              <th class="text-left text-xs text-green-700 uppercase tracking-wider font-semibold px-4 py-3">Club Name</th>
+              <th class="text-left text-xs text-green-700 uppercase tracking-wider font-semibold px-4 py-3">Email</th>
+              <th class="text-left text-xs text-green-700 uppercase tracking-wider font-semibold px-4 py-3">Signed Up</th>
+              <th class="text-left text-xs text-green-700 uppercase tracking-wider font-semibold px-4 py-3"></th>
+            </tr>
+          </thead>
+          <tbody id="clubs-tbody"></tbody>
+        </table>
+      </div>
+
+      <!-- No results (after search filter) -->
+      <div id="no-results" class="hidden py-8 text-center">
+        <p class="text-green-700 text-sm">No clubs match your search.</p>
+      </div>
+
+    </div><!-- /card -->
+
+    <!-- SQL setup note -->
+    <div class="mt-6 bg-yellow-950/30 border border-yellow-900/40 rounded-xl px-5 py-4 text-xs text-yellow-700 slide-up" style="animation-delay:0.2s">
+      <p class="font-semibold text-yellow-600 mb-1">⚙️ Setup required in Supabase</p>
+      <p>Run this SQL once in your Supabase SQL Editor if the clubs table doesn't exist yet:</p>
+      <pre class="mt-2 bg-black/30 rounded-lg p-3 text-yellow-800 overflow-x-auto leading-relaxed">CREATE TABLE IF NOT EXISTS clubs (
+  id         UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id    UUID NOT NULL UNIQUE,
+  club_name  TEXT NOT NULL,
+  email      TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE clubs ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Public can read clubs"
+  ON clubs FOR SELECT USING (true);
+CREATE POLICY "Auth users insert own club"
+  ON clubs FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Auth users update own club"
+  ON clubs FOR UPDATE USING (auth.uid() = user_id);</pre>
+    </div>
+
+  </main>
+</div><!-- /dashboard -->
+
+<script>
+// ── INIT ──────────────────────────────────────────────────
+const db = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON);
+let allClubs = [];
+
+// ── AUTH ──────────────────────────────────────────────────
+function doLogin() {
+  const pw = document.getElementById('sa-password').value;
+  if (pw === window.SUPER_ADMIN_PASSWORD) {
+    document.getElementById('login-gate').classList.add('hidden');
+    document.getElementById('dashboard').classList.remove('hidden');
+    loadClubs();
+  } else {
+    document.getElementById('login-error').classList.remove('hidden');
+    document.getElementById('sa-password').value = '';
+    document.getElementById('sa-password').focus();
+  }
+}
+
+function doLogout() {
+  document.getElementById('dashboard').classList.add('hidden');
+  document.getElementById('login-gate').classList.remove('hidden');
+  document.getElementById('sa-password').value = '';
+  document.getElementById('login-error').classList.add('hidden');
+  allClubs = [];
+}
+
+// ── LOAD CLUBS ────────────────────────────────────────────
+async function loadClubs() {
+  showState('loading');
+
+  const { data, error } = await db
+    .from('clubs')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    showState('error');
+    document.getElementById('table-error-msg').textContent = error.message || 'Failed to load clubs.';
+    return;
+  }
+
+  allClubs = data || [];
+  updateStats(allClubs);
+  renderTable(allClubs);
+}
+
+// ── STATS ─────────────────────────────────────────────────
+function updateStats(clubs) {
+  const now   = new Date();
+  const month = new Date(now.getFullYear(), now.getMonth(), 1);
+  const week  = new Date(now); week.setDate(now.getDate() - 7);
+
+  document.getElementById('stat-total').textContent = clubs.length;
+  document.getElementById('stat-month').textContent = clubs.filter(c => new Date(c.created_at) >= month).length;
+  document.getElementById('stat-week').textContent  = clubs.filter(c => new Date(c.created_at) >= week).length;
+}
+
+// ── RENDER TABLE ──────────────────────────────────────────
+function renderTable(clubs) {
+  if (clubs.length === 0) {
+    showState('empty');
+    return;
+  }
+
+  const tbody = document.getElementById('clubs-tbody');
+  tbody.innerHTML = clubs.map((club, i) => {
+    const date    = new Date(club.created_at);
+    const dateStr = date.toLocaleDateString('en-US', { year:'numeric', month:'short', day:'numeric' });
+    const timeStr = date.toLocaleTimeString('en-US', { hour:'2-digit', minute:'2-digit' });
+    const isNew   = (Date.now() - date.getTime()) < 7 * 24 * 60 * 60 * 1000;
+
+    return `<tr class="border-b border-green-900/20 transition-colors">
+      <td class="px-5 py-3.5 text-green-800 text-xs">${i + 1}</td>
+      <td class="px-4 py-3.5">
+        <div class="flex items-center gap-2">
+          <span class="font-semibold text-green-100">${escHtml(club.club_name)}</span>
+          ${isNew ? '<span class="badge-new text-xs px-1.5 py-0.5 rounded-md font-semibold">New</span>' : ''}
+        </div>
+      </td>
+      <td class="px-4 py-3.5 text-green-400 text-xs">${escHtml(club.email)}</td>
+      <td class="px-4 py-3.5">
+        <div class="text-green-300 text-xs">${dateStr}</div>
+        <div class="text-green-800 text-xs">${timeStr}</div>
+      </td>
+      <td class="px-4 py-3.5">
+        <a href="../admin/index.html"
+          class="text-pickle-500 hover:text-pickle-400 text-xs font-medium hover:underline transition-colors"
+          title="Open admin for this club">Admin ↗</a>
+      </td>
+    </tr>`;
+  }).join('');
+
+  showState('table');
+}
+
+// ── SEARCH FILTER ─────────────────────────────────────────
+function filterTable() {
+  const q       = document.getElementById('search-input').value.trim().toLowerCase();
+  const filtered = q
+    ? allClubs.filter(c =>
+        c.club_name.toLowerCase().includes(q) ||
+        c.email.toLowerCase().includes(q))
+    : allClubs;
+
+  if (filtered.length === 0 && allClubs.length > 0) {
+    renderTable([]);
+    showState('no-results');
+    return;
+  }
+  renderTable(filtered);
+}
+
+// ── DISPLAY STATE ─────────────────────────────────────────
+function showState(state) {
+  document.getElementById('table-loading').classList.add('hidden');
+  document.getElementById('table-empty').classList.add('hidden');
+  document.getElementById('table-error').classList.add('hidden');
+  document.getElementById('table-wrap').classList.add('hidden');
+  document.getElementById('no-results').classList.add('hidden');
+
+  if (state === 'loading')    document.getElementById('table-loading').classList.remove('hidden');
+  if (state === 'empty')      document.getElementById('table-empty').classList.remove('hidden');
+  if (state === 'error')      document.getElementById('table-error').classList.remove('hidden');
+  if (state === 'table')      document.getElementById('table-wrap').classList.remove('hidden');
+  if (state === 'no-results') {
+    document.getElementById('table-wrap').classList.remove('hidden');
+    document.getElementById('no-results').classList.remove('hidden');
+  }
+}
+
+// ── UTILS ─────────────────────────────────────────────────
+function escHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+</script>
+</body>
+</html>
