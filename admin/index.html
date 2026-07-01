@@ -410,6 +410,17 @@ async function unlockAdmin() {
   document.getElementById('admin-header').classList.remove('hidden');
   document.getElementById('admin-main').classList.remove('hidden');
   await initClubContext(); // sets currentClubId = auth user id
+
+  // Register/update club in clubs table so super admin can see it
+  const { data: { user } } = await db.auth.getUser();
+  if (user?.id) {
+    await db.from('clubs').upsert({
+      user_id: user.id,
+      club_name: user.user_metadata?.club_name || 'Unnamed Club',
+      email: user.email,
+    }, { onConflict: 'user_id' });
+  }
+
   init();
 }
 

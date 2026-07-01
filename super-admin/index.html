@@ -192,7 +192,7 @@
               <th class="text-left text-xs text-green-700 uppercase tracking-wider font-semibold px-4 py-3">Club Name</th>
               <th class="text-left text-xs text-green-700 uppercase tracking-wider font-semibold px-4 py-3">Email</th>
               <th class="text-left text-xs text-green-700 uppercase tracking-wider font-semibold px-4 py-3">Signed Up</th>
-              <th class="text-left text-xs text-green-700 uppercase tracking-wider font-semibold px-4 py-3"></th>
+              <th class="text-left text-xs text-green-700 uppercase tracking-wider font-semibold px-4 py-3">Actions</th>
             </tr>
           </thead>
           <tbody id="clubs-tbody"></tbody>
@@ -223,7 +223,9 @@ CREATE POLICY "Public can read clubs"
 CREATE POLICY "Auth users insert own club"
   ON clubs FOR INSERT WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "Auth users update own club"
-  ON clubs FOR UPDATE USING (auth.uid() = user_id);</pre>
+  ON clubs FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "Allow anon delete for super admin"
+  ON clubs FOR DELETE USING (true);</pre>
     </div>
 
   </main>
@@ -316,9 +318,14 @@ function renderTable(clubs) {
         <div class="text-green-800 text-xs">${timeStr}</div>
       </td>
       <td class="px-4 py-3.5">
-        <a href="../admin/index.html"
-          class="text-pickle-500 hover:text-pickle-400 text-xs font-medium hover:underline transition-colors"
-          title="Open admin for this club">Admin ↗</a>
+        <div class="flex items-center gap-3">
+          <a href="../admin/index.html"
+            class="text-pickle-500 hover:text-pickle-400 text-xs font-medium hover:underline transition-colors"
+            title="Open admin for this club">Admin ↗</a>
+          <button onclick="removeClub('${escHtml(club.id)}', '${escHtml(club.club_name)}')"
+            class="text-red-600 hover:text-red-400 text-xs font-medium transition-colors"
+            title="Remove club">Remove</button>
+        </div>
       </td>
     </tr>`;
   }).join('');
@@ -359,6 +366,22 @@ function showState(state) {
     document.getElementById('table-wrap').classList.remove('hidden');
     document.getElementById('no-results').classList.remove('hidden');
   }
+}
+
+// ── REMOVE CLUB ───────────────────────────────────────────
+async function removeClub(id, name) {
+  const confirmed = confirm(`Remove "${name}" from the platform?\n\nThis removes them from the clubs list. Their Supabase auth account will remain.`);
+  if (!confirmed) return;
+
+  const { error } = await db.from('clubs').delete().eq('id', id);
+  if (error) {
+    alert('Failed to remove club: ' + error.message);
+    return;
+  }
+
+  allClubs = allClubs.filter(c => c.id !== id);
+  updateStats(allClubs);
+  renderTable(allClubs);
 }
 
 // ── UTILS ─────────────────────────────────────────────────
