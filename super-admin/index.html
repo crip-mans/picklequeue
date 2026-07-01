@@ -234,10 +234,12 @@ CREATE POLICY "Auth users update own club"
 const db = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON);
 let allClubs = [];
 
+const SUPER_ADMIN_PW = window.SUPER_ADMIN_PASSWORD || 'superadmin2024';
+
 // ── AUTH ──────────────────────────────────────────────────
 function doLogin() {
   const pw = document.getElementById('sa-password').value;
-  if (pw === window.SUPER_ADMIN_PASSWORD) {
+  if (pw === SUPER_ADMIN_PW) {
     document.getElementById('login-gate').classList.add('hidden');
     document.getElementById('dashboard').classList.remove('hidden');
     loadClubs();
